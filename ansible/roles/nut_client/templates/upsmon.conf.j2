@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+MONITOR {{ nut_ups_name }}@{{ nut_server }} 1 upsmon_remote {{ nut_remote_password }} secondary
+MINSUPPLIES 1
+SHUTDOWNCMD "/sbin/shutdown -h +0"
+POLLFREQ 5
+POLLFREQALERT 5
+DEADTIME 25

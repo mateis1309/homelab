@@ -1,0 +1,17 @@
+---
+hardening_ufw_allowed_tcp_ports: [3000, 3001, 9090, 9093]
+
+stacks_enabled: [monitoring]
+
+# Docker publishes ports past UFW, so published ports are filtered in DOCKER-USER instead:
+# only the reverse proxy and the admin zones can reach the UIs.
+docker_host_published_allow:
+  - "{{ lab_hosts['svc-01'].ip }}/32"
+  - "{{ lab_zones['mgmt'].cidr }}"
+  - "{{ lab_vpn.cidr }}"
+
+# node_exporter targets (hostnames from lab.yml)
+monitoring_node_targets: [router, pve, svc-01, mon-01]
+monitoring_backup_hosts: [svc-01]
+monitoring_backup_max_age_hours: 36
+monitoring_restore_test_max_age_days: 8

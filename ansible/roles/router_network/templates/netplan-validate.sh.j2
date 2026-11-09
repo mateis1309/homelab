@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Validate a single netplan file in isolation: netplan generate in an empty root.
+set -euo pipefail
+candidate="$1"
+root="$(mktemp -d)"
+trap 'rm -rf "$root"' EXIT
+mkdir -p "$root/etc/netplan"
+install -m 0600 "$candidate" "$root/etc/netplan/60-homelab.yaml"
+netplan generate --root-dir "$root"

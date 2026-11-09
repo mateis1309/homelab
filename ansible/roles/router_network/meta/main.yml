@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Ștefan Matei
+  description: WAN + LACP bond + one VLAN interface per zone, via netplan
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions: [noble]
+dependencies: []

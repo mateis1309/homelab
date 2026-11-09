@@ -1,0 +1,111 @@
+---
+# Single source of truth for the network.
+# Read by Ansible (as group_vars) AND by Terraform (yamldecode in terraform/main.tf),
+# so a VM's VLAN, address and size are defined exactly once.
+# Keep this file plain YAML: no Jinja, no vault values.
+
+lab_domain: home.arpa # RFC 8375 name for home networks
+
+# One /24 per zone. The router is always .1, static hosts use .10-.99, DHCP hands out .100-.199.
+lab_zones:
+  mgmt:
+    vlan: 10
+    cidr: 10.10.10.0/24
+    internet: true
+    description: Switches, router, hypervisor, UPS. Admin access only.
+  servers:
+    vlan: 20
+    cidr: 10.10.20.0/24
+    internet: true
+    description: NAS units, VMs, game server.
+  backup:
+    vlan: 25
+    cidr: 10.10.25.0/24
+    internet: false
+    description: End-of-life Zyxel NAS326. Reachable only by the primary NAS (rsync) and mgmt.
+  trusted:
+    vlan: 30
+    cidr: 10.10.30.0/24
+    internet: true
+    description: Personal laptops and phones. Default VLAN for wall drops.
+  iot:
+    vlan: 40
+    cidr: 10.10.40.0/24
+    internet: true
+    description: Home automation, casting, smart speakers, doorbell. Cannot open connections to other zones.
+  cameras:
+    vlan: 50
+    cidr: 10.10.50.0/24
+    internet: false
+    description: PoE IP cameras. No internet; only the NVR may talk to them.
+  guest:
+    vlan: 60
+    cidr: 10.10.60.0/24
+    internet: true
+    description: Visitors. Internet only.
+
+# WireGuard road-warrior peers. Treated as an admin zone by the firewall.
+lab_vpn:
+  cidr: 10.10.99.0/24
+  port: 51820
+
+# Every addressable host. `mac` is used for DHCP reservations (placeholders until filled in).
+# Hosts with a `vm:` block are created by Terraform on the Proxmox node.
+lab_hosts:
+  router:
+    zone: mgmt
+    ip: 10.10.10.1
+    description: Supermicro SYS-A2SDI-4C4L-FIO (Atom C3558, 4x 1GbE), Ubuntu Server
+  core-switch:
+    zone: mgmt
+    ip: 10.10.10.2
+    mac: "02:00:00:00:10:02"
+    description: D-Link DGS-1210-52
+  poe-switch:
+    zone: mgmt
+    ip: 10.10.10.3
+    mac: "02:00:00:00:10:03"
+    description: Netgear GS110TP (cameras)
+  pve:
+    zone: mgmt
+    ip: 10.10.10.20
+    mac: "02:00:00:00:10:20"
+    description: Intel NUC, Proxmox VE 9
+  nas-primary:
+    zone: servers
+    ip: 10.10.20.10
+    mac: "02:00:00:00:20:10"
+    description: Synology DS1815+ (8-bay, 32 TB)
+  nas-backup:
+    zone: backup
+    ip: 10.10.25.10
+    mac: "02:00:00:00:25:10"
+    description: Zyxel NAS326 (end-of-life, backup target only, isolated VLAN)
+  svc-01:
+    zone: servers
+    ip: 10.10.20.30
+    description: Docker host for self-hosted services
+    vm:
+      id: 120
+      cores: 4
+      memory_mb: 8192
+      disk_gb: 64
+  mon-01:
+    zone: servers
+    ip: 10.10.20.31
+    description: Monitoring and alerting (kept separate so it can report svc-01 being down)
+    vm:
+      id: 121
+      cores: 2
+      memory_mb: 3072
+      disk_gb: 32
+  minecraft:
+    zone: servers
+    ip: 10.10.20.40
+    mac: "02:00:00:00:20:40"
+    description: MacBook Pro (clamshell), Minecraft server
+  openhab:
+    zone: iot
+    ip: 10.10.40.10
+    mac: "02:00:00:00:40:10"
+    description: Raspberry Pi 4, openHAB

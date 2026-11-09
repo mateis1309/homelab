@@ -1,0 +1,57 @@
+# {{ ansible_managed }}
+{% raw %}
+groups:
+  - name: hosts
+    rules:
+      - alert: HostDown
+        expr: up{job="node"} == 0
+        for: 3m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }} is not reporting metrics"
+
+      - alert: DiskAlmostFull
+        expr: >-
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+          / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) < 0.15
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }}: {{ $labels.mountpoint }} has less than 15% free"
+
+      - alert: MemoryPressure
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }} has less than 10% memory available"
+
+
+  - name: backups
+    rules:
+{% endraw %}
+      - alert: BackupFailed
+        expr: homelab_backup_last_exit_code != 0
+        labels: {severity: critical}
+        annotations:
+          summary: "{% raw %}{{ $labels.instance }}{% endraw %}: last backup run failed"
+
+      - alert: BackupTooOld
+        expr: time() - homelab_backup_last_success_timestamp_seconds > {{ monitoring_backup_max_age_hours * 3600 }}
+        labels: {severity: critical}
+        annotations:
+          summary: "{% raw %}{{ $labels.instance }}{% endraw %}: no successful backup in {{ monitoring_backup_max_age_hours }}h"
+
+      - alert: BackupMetricsMissing
+        expr: >-
+          absent(homelab_backup_last_success_timestamp_seconds)
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "No backup metrics reported at all (job never ran or exporter not collecting)"
+
+      - alert: RestoreTestTooOld
+        expr: time() - homelab_restore_test_last_success_timestamp_seconds > {{ monitoring_restore_test_max_age_days * 86400 }}
+        labels: {severity: warning}
+        annotations:
+          summary: "{% raw %}{{ $labels.instance }}{% endraw %}: no successful restore test in {{ monitoring_restore_test_max_age_days }} days"

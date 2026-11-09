@@ -1,0 +1,16 @@
+---
+- name: Configure VLAN-aware bridge
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  register: pve_interfaces
+
+# ifupdown2 (Proxmox default) can reload without a reboot.
+- name: Reload network
+  ansible.builtin.command: ifreload -a
+  when: pve_interfaces is changed
+  changed_when: true

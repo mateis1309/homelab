@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+set -euo pipefail
+cp -a {{ router_firewall_file }} {{ router_firewall_previous }}
+install -m 0755 {{ router_firewall_staged }} {{ router_firewall_file }}
+nft -f {{ router_firewall_file }}

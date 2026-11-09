@@ -1,0 +1,26 @@
+---
+# Container image versions, pinned. Renovate (renovate.json) opens PRs to bump them;
+# the comment above each line tells it where to look.
+
+# renovate: datasource=docker depName=docker.io/library/traefik
+traefik_version: v3.7.17
+# renovate: datasource=docker depName=ghcr.io/goauthentik/server
+authentik_version: "2026.8.5"
+# renovate: datasource=docker depName=docker.io/vaultwarden/server
+vaultwarden_version: 1.37.5
+# renovate: datasource=docker depName=ghcr.io/paperless-ngx/paperless-ngx
+paperless_version: 3.4.2
+# renovate: datasource=docker depName=ghcr.io/blakeblackshear/frigate
+frigate_version: 0.18.2
+# renovate: datasource=docker depName=docker.io/prom/prometheus
+prometheus_version: v3.16.0
+# renovate: datasource=docker depName=docker.io/prom/alertmanager
+alertmanager_version: v0.34.2
+# renovate: datasource=docker depName=docker.io/grafana/grafana
+grafana_version: 13.3.0
+# renovate: datasource=docker depName=docker.io/louislam/uptime-kuma
+uptime_kuma_version: 2.5.9
+# renovate: datasource=docker depName=docker.io/library/postgres
+postgres_version: 18-alpine
+# renovate: datasource=docker depName=docker.io/valkey/valkey
+valkey_version: 9-alpine

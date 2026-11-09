@@ -1,0 +1,45 @@
+# {{ ansible_managed }}
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+accessLog: {}
+
+api:
+  dashboard: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    http:
+      middlewares: [security-headers@file]
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "{{ services_domain }}"
+            sans: ["*.{{ services_domain }}"]
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# DNS-01 challenge: works for names that only resolve inside the lab,
+# and no port has to be opened to the internet.
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "{{ traefik_acme_email }}"
+      storage: /acme/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers: ["1.1.1.1:53", "9.9.9.9:53"]

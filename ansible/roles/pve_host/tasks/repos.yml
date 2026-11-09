@@ -1,0 +1,23 @@
+---
+# Proxmox VE 9 ships deb822 .sources files with the enterprise repos enabled.
+- name: Disable enterprise repositories
+  ansible.builtin.lineinfile:
+    path: "/etc/apt/sources.list.d/{{ item }}.sources"
+    regexp: "^Enabled:"
+    line: "Enabled: no"
+    insertafter: "^Types:"
+  loop: [pve-enterprise, ceph]
+  failed_when: false
+
+- name: Add the no-subscription repository
+  ansible.builtin.template:
+    src: proxmox.sources.j2
+    dest: /etc/apt/sources.list.d/proxmox.sources
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Refresh apt cache
+  ansible.builtin.apt:
+    update_cache: true
+  changed_when: false

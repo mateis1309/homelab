@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Ștefan Matei
+  description: Render and run Docker Compose stacks from templates/<stack>/
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions: [noble]
+dependencies: []

@@ -1,0 +1,48 @@
+# {{ ansible_managed }}
+# Document archive with OCR. Based on the upstream docker-compose.postgres.yml.
+services:
+  broker:
+    image: docker.io/valkey/valkey:{{ valkey_version }}
+    container_name: paperless-broker
+    restart: unless-stopped
+    volumes:
+      - ./valkey:/data
+
+  db:
+    image: docker.io/library/postgres:{{ postgres_version }}
+    container_name: paperless-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+    volumes:
+      # postgres 18+ images keep data under /var/lib/postgresql/<major>/
+      - ./postgres:/var/lib/postgresql
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:{{ paperless_version }}
+    container_name: paperless
+    restart: unless-stopped
+    depends_on: [db, broker]
+    env_file: .env
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBENGINE: postgresql
+      PAPERLESS_URL: "https://docs.{{ services_domain }}"
+      PAPERLESS_TIME_ZONE: "{{ common_timezone }}"
+      PAPERLESS_OCR_LANGUAGE: "{{ paperless_ocr_language }}"
+      PAPERLESS_OCR_LANGUAGES: "{{ paperless_ocr_language | replace('+', ' ') }}"
+      USERMAP_UID: "1000"
+      USERMAP_GID: "1000"
+    volumes:
+      - ./data:/usr/src/paperless/data
+      - ./media:/usr/src/paperless/media
+      - ./export:/usr/src/paperless/export
+      - ./consume:/usr/src/paperless/consume
+    networks: [default, proxy]
+
+networks:
+  proxy:
+    external: true

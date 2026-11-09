@@ -1,0 +1,63 @@
+# {{ ansible_managed }}
+# Runs on its own VM so it can still alert when svc-01 is down.
+# Ports are bound to the VM address and filtered in DOCKER-USER (see docker_host role).
+
+services:
+  prometheus:
+    image: docker.io/prom/prometheus:{{ prometheus_version }}
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.external-url=https://prometheus.{{ services_domain }}
+    ports: ["{{ ansible_host }}:9090:9090"]
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - ./prometheus-data:/prometheus
+
+  alertmanager:
+    image: docker.io/prom/alertmanager:{{ alertmanager_version }}
+    container_name: alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.external-url=https://alerts.{{ services_domain }}
+    ports: ["{{ ansible_host }}:9093:9093"]
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+      - ./alertmanager-data:/alertmanager
+
+  grafana:
+    image: docker.io/grafana/grafana:{{ grafana_version }}
+    container_name: grafana
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GF_SERVER_ROOT_URL: "https://grafana.{{ services_domain }}"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Single sign-on through authentik (OAuth2/OIDC provider "grafana")
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: authentik
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: grafana
+      GF_AUTH_GENERIC_OAUTH_SCOPES: openid profile email
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: "https://auth.{{ services_domain }}/application/o/authorize/"
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "https://auth.{{ services_domain }}/application/o/token/"
+      GF_AUTH_GENERIC_OAUTH_API_URL: "https://auth.{{ services_domain }}/application/o/userinfo/"
+      GF_AUTH_SIGNOUT_REDIRECT_URL: "https://auth.{{ services_domain }}/application/o/grafana/end-session/"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(groups[*], 'admins') && 'Admin' || 'Viewer'"
+    ports: ["{{ ansible_host }}:3000:3000"]
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana-data:/var/lib/grafana
+
+  uptime-kuma:
+    image: docker.io/louislam/uptime-kuma:{{ uptime_kuma_version }}
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports: ["{{ ansible_host }}:3001:3001"]
+    volumes:
+      - ./uptime-kuma-data:/app/data

@@ -1,0 +1,155 @@
+---
+# End-to-end test of the backup pipeline, run in CI and locally (needs restic + sqlite3):
+#   1. render the real backup and restore-test scripts into a sandbox
+#   2. back up sample data (an SQLite database + a config file) to a throwaway restic repo
+#   3. run the restore test and check the Prometheus metrics it writes
+#   4. break the data, back up again, and check that the restore test now FAILS
+#      while keeping the previous "last success" timestamp
+#
+#   cd ansible && ansible-playbook tests/backup_e2e.yml
+- name: Backup end-to-end test
+  hosts: svc-01
+  connection: local
+  gather_facts: false
+  vars:
+    sandbox: "{{ playbook_dir | dirname | dirname }}/build/backup-e2e"
+    templates: "{{ playbook_dir }}/../roles/restic_backup/templates"
+    restic_repository: "{{ sandbox }}/repo"
+    restic_password: e2e-test-password
+    restic_config_dir: "{{ sandbox }}/etc"
+    restic_cache_dir: "{{ sandbox }}/cache"
+    restic_lib_dir: "{{ sandbox }}/lib"
+    restic_scratch_dir: "{{ sandbox }}/tmp"
+    restic_metrics_dir: "{{ sandbox }}/metrics"
+    restic_dump_dir: "{{ sandbox }}/dumps"
+    restic_backup_paths: ["{{ sandbox }}/data", "{{ sandbox }}/dumps"]
+    restic_excludes: ["{{ sandbox }}/data/*/postgres"]
+    restic_db_dumps:
+      - {name: app, type: sqlite, path: "{{ sandbox }}/data/app/app.sqlite3"}
+    restic_restore_test_paths: ["{{ sandbox }}/data/app/config.yml"]
+    restic_keep_daily: 7
+    restic_keep_weekly: 4
+    restic_keep_monthly: 6
+    restic_check_read_subset: 100%
+    script_env:
+      PATH: "{{ lookup('env', 'PATH') }}"
+  tasks:
+    - name: Start from an empty sandbox
+      ansible.builtin.file:
+        path: "{{ sandbox }}"
+        state: absent
+
+    - name: Create sandbox directories
+      ansible.builtin.file:
+        path: "{{ sandbox }}/{{ item }}"
+        state: directory
+        mode: "0700"
+      loop: [etc, cache, lib, tmp, metrics, dumps, bin, data/app/postgres]
+
+    - name: Render configuration and scripts (same templates as production)
+      ansible.builtin.template:
+        src: "{{ templates }}/{{ item.src }}"
+        dest: "{{ sandbox }}/{{ item.dest }}"
+        mode: "{{ item.mode | default('0600') }}"
+      loop:
+        - {src: env.j2, dest: etc/env}
+        - {src: excludes.j2, dest: etc/excludes}
+        - {src: metrics.sh.j2, dest: lib/metrics.sh}
+        - {src: homelab-backup.sh.j2, dest: bin/homelab-backup, mode: "0700"}
+        - {src: homelab-restore-test.sh.j2, dest: bin/homelab-restore-test, mode: "0700"}
+
+    - name: Write repository password
+      ansible.builtin.copy:
+        dest: "{{ restic_config_dir }}/password"
+        content: "{{ restic_password }}\n"
+        mode: "0600"
+
+    - name: Create sample data
+      ansible.builtin.shell: |
+        set -euo pipefail
+        sqlite3 data/app/app.sqlite3 "CREATE TABLE notes(id INTEGER PRIMARY KEY, body TEXT);
+          INSERT INTO notes(body) VALUES ('hello'), ('world');"
+        echo "setting: true" > data/app/config.yml
+        echo "live database files" > data/app/postgres/PG_VERSION
+      args:
+        chdir: "{{ sandbox }}"
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Initialise repository
+      ansible.builtin.shell: set -a && . etc/env && set +a && restic init
+      args:
+        chdir: "{{ sandbox }}"
+        executable: /bin/bash
+      changed_when: true
+
+    # --- Happy path ---------------------------------------------------------
+    - name: Run backup
+      ansible.builtin.command: "{{ sandbox }}/bin/homelab-backup"
+      environment: "{{ script_env }}"
+      changed_when: true
+
+    - name: Run restore test
+      ansible.builtin.command: "{{ sandbox }}/bin/homelab-restore-test"
+      environment: "{{ script_env }}"
+      register: e2e_restore_ok
+      changed_when: false
+
+    - name: List snapshot contents
+      ansible.builtin.shell: set -a && . etc/env && set +a && restic ls latest
+      args:
+        chdir: "{{ sandbox }}"
+        executable: /bin/bash
+      register: e2e_ls
+      changed_when: false
+
+    - name: Read metrics
+      ansible.builtin.set_fact:
+        e2e_backup_metrics: "{{ lookup('file', restic_metrics_dir ~ '/homelab_backup.prom') }}"
+        e2e_restore_metrics: "{{ lookup('file', restic_metrics_dir ~ '/homelab_restore_test.prom') }}"
+
+    - name: Check happy path
+      ansible.builtin.assert:
+        that:
+          - "'homelab_backup_last_exit_code 0' in e2e_backup_metrics"
+          - "e2e_backup_metrics is search('homelab_backup_last_success_timestamp_seconds [1-9][0-9]+')"
+          - "'homelab_restore_test_last_exit_code 0' in e2e_restore_metrics"
+          - "e2e_restore_metrics is search('homelab_restore_test_last_success_timestamp_seconds [1-9][0-9]+')"
+          - "'ok      app database' in e2e_restore_ok.stdout"
+          - "(sandbox ~ '/dumps/app.sqlite3') in e2e_ls.stdout_lines"
+          - "e2e_ls.stdout is not search('/postgres')"
+        fail_msg: "Backup/restore happy path failed"
+        success_msg: "backup ok, restore test ok, metrics ok, excluded paths not in snapshot"
+
+    # --- Failure path -------------------------------------------------------
+    - name: Remember the last successful restore-test timestamp
+      ansible.builtin.set_fact:
+        e2e_last_ok: "{{ e2e_restore_metrics | regex_search('homelab_restore_test_last_success_timestamp_seconds ([0-9]+)', '\\1') | first }}"
+
+    - name: Lose a file that the restore test expects, then back up again
+      ansible.builtin.file:
+        path: "{{ sandbox }}/data/app/config.yml"
+        state: absent
+
+    - name: Run backup without the file
+      ansible.builtin.command: "{{ sandbox }}/bin/homelab-backup"
+      environment: "{{ script_env }}"
+      changed_when: true
+
+    - name: Run restore test (must fail)
+      ansible.builtin.command: "{{ sandbox }}/bin/homelab-restore-test"
+      environment: "{{ script_env }}"
+      register: e2e_restore_bad
+      failed_when: e2e_restore_bad.rc == 0
+      changed_when: false
+
+    - name: Check failure path
+      vars:
+        metrics: "{{ lookup('file', restic_metrics_dir ~ '/homelab_restore_test.prom') }}"
+      ansible.builtin.assert:
+        that:
+          - "'MISSING ' in e2e_restore_bad.stdout"
+          - "'homelab_restore_test_last_exit_code 1' in metrics"
+          - "('homelab_restore_test_last_success_timestamp_seconds ' ~ e2e_last_ok) in metrics"
+        fail_msg: "Restore test did not report the missing file correctly"
+        success_msg: "missing file detected, exit code reported, last-success timestamp preserved"

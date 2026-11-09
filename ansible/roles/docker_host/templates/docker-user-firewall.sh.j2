@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Docker inserts its own iptables rules ahead of UFW, so `ufw deny` does not protect published
+# container ports. DOCKER-USER is the chain Docker reserves for exactly this.
+set -euo pipefail
+ext="{{ docker_host_external_interface }}"
+iptables -N DOCKER-USER 2>/dev/null || true
+iptables -F DOCKER-USER
+iptables -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+{% for cidr in docker_host_published_allow %}
+iptables -A DOCKER-USER -i "$ext" -s {{ cidr }} -j RETURN
+{% endfor %}
+iptables -A DOCKER-USER -i "$ext" -j DROP
+iptables -A DOCKER-USER -j RETURN

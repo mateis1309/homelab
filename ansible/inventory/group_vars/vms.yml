@@ -1,0 +1,4 @@
+---
+# VMs created by Terraform; cloud-init installs the `ops` user with the SSH key.
+# Temper's hardening role: UFW default-deny with SSH rate limiting. Web ports per group below.
+hardening_auto_reboot: false

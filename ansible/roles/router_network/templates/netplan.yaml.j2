@@ -1,0 +1,32 @@
+# {{ ansible_managed }}
+# Source: ansible/inventory/group_vars/all/lab.yml (zones) and group_vars/routers.yml (ports)
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ router_wan_interface }}:
+      dhcp4: {{ router_network_wan_dhcp | lower }}
+      dhcp6: false
+{% for nic in router_lan_bond_members %}
+    {{ nic }}:
+      dhcp4: false
+      dhcp6: false
+{% endfor %}
+  bonds:
+    {{ router_lan_bond_name }}:
+      interfaces: [{{ router_lan_bond_members | join(', ') }}]
+      dhcp4: false
+      dhcp6: false
+      parameters:
+        mode: 802.3ad
+        lacp-rate: fast
+        mii-monitor-interval: 100
+        transmit-hash-policy: layer3+4
+  vlans:
+{% for name, zone in lab_zones.items() %}
+    vlan{{ zone.vlan }}:
+      # {{ name }}: {{ zone.description }}
+      id: {{ zone.vlan }}
+      link: {{ router_lan_bond_name }}
+      addresses: [{{ lab_gateways[name] }}/{{ zone.cidr.split('/')[1] }}]
+{% endfor %}

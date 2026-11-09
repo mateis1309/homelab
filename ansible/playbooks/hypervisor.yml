@@ -1,0 +1,12 @@
+---
+- name: Proxmox host
+  hosts: hypervisors
+  become: true
+  roles:
+    - role: pve_host
+    - role: common
+    - role: hardening
+    - role: nut_client
+      tags: [ups]
+    - role: node_exporter
+      tags: [monitoring]

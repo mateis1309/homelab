@@ -1,0 +1,8 @@
+---
+# Name of the transient systemd unit that holds the rollback (one per kind of change).
+safe_apply_unit: homelab-rollback
+# Absolute path of a script that restores the previous state. Must work with no network.
+safe_apply_rollback_cmd: ""
+# Command that applies the new state. Runs detached so a dropped SSH session cannot kill it.
+safe_apply_commit_cmd: ""
+safe_apply_timeout: 120

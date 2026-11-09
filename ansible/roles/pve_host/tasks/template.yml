@@ -1,0 +1,49 @@
+---
+- name: Check whether the template exists
+  ansible.builtin.command: qm status {{ pve_template_id }}
+  register: pve_template_status
+  changed_when: false
+  failed_when: false
+
+- name: Build template
+  when: pve_template_status.rc != 0
+  block:
+    - name: Download Ubuntu cloud image
+      ansible.builtin.get_url:
+        url: "{{ pve_template_image_url }}"
+        dest: "{{ pve_template_image_path }}"
+        mode: "0644"
+
+    - name: Install libguestfs tools
+      ansible.builtin.apt:
+        name: libguestfs-tools
+        state: present
+      when: pve_template_bake_agent | bool
+
+    - name: Bake qemu-guest-agent into the image
+      ansible.builtin.command: >-
+        virt-customize -a {{ pve_template_image_path }}
+        --install qemu-guest-agent --truncate /etc/machine-id
+      when: pve_template_bake_agent | bool
+      changed_when: true
+
+    - name: Create VM shell
+      ansible.builtin.command: >-
+        qm create {{ pve_template_id }} --name {{ pve_template_name }}
+        --memory 2048 --cores 2 --cpu host --ostype l26
+        --net0 virtio,bridge={{ pve_bridge }}
+        --scsihw virtio-scsi-single --agent enabled=1
+        --serial0 socket --vga serial0
+      changed_when: true
+
+    - name: Import disk
+      ansible.builtin.command: >-
+        qm set {{ pve_template_id }}
+        --scsi0 {{ pve_template_storage }}:0,import-from={{ pve_template_image_path }},discard=on,iothread=1
+        --ide2 {{ pve_template_storage }}:cloudinit
+        --boot order=scsi0
+      changed_when: true
+
+    - name: Convert to template
+      ansible.builtin.command: qm template {{ pve_template_id }}
+      changed_when: true

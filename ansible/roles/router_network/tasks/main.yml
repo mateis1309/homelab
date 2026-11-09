@@ -1,0 +1,56 @@
+---
+- name: Enable IP forwarding
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_file: /etc/sysctl.d/90-router.conf
+    reload: true
+  loop:
+    - net.ipv4.ip_forward
+
+- name: Install helper scripts
+  ansible.builtin.template:
+    src: "{{ item }}.sh.j2"
+    dest: "/usr/local/sbin/homelab-{{ item }}"
+    owner: root
+    group: root
+    mode: "0750"
+  loop: [netplan-validate, netplan-commit, netplan-rollback]
+
+- name: Stage netplan configuration (validated in isolation)
+  ansible.builtin.template:
+    src: netplan.yaml.j2
+    dest: "{{ router_network_staged }}"
+    owner: root
+    group: root
+    mode: "0600"
+    validate: /usr/local/sbin/homelab-netplan-validate %s
+  register: router_network_staged_result
+
+- name: Compare staged and active configuration
+  ansible.builtin.command: "cmp -s {{ router_network_staged }} {{ router_network_file }}"
+  register: router_network_diff
+  changed_when: false
+  failed_when: false
+
+- name: Report pending cut-over
+  ansible.builtin.debug:
+    msg: >-
+      Network config is staged at {{ router_network_staged }} but not active.
+      Run 'sudo homelab-netplan-commit' from the console (docs/runbooks/bootstrap.md),
+      then set router_network_live_apply: true.
+  when:
+    - router_network_diff.rc != 0
+    - not (router_network_live_apply | bool)
+
+- name: Apply network change with automatic rollback
+  ansible.builtin.include_role:
+    name: safe_apply
+  vars:
+    safe_apply_unit: homelab-rollback-netplan
+    safe_apply_rollback_cmd: /usr/local/sbin/homelab-netplan-rollback
+    safe_apply_commit_cmd: /usr/local/sbin/homelab-netplan-commit
+    safe_apply_timeout: "{{ router_rollback_seconds }}"
+  when:
+    - router_network_diff.rc != 0
+    - router_network_live_apply | bool

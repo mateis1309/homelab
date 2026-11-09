@@ -1,0 +1,89 @@
+---
+# Renders every template with the real inventory and dummy secrets, on the control node,
+# so tests/validate.sh can check the output with the real tools (nft, dnsmasq, netplan,
+# docker compose, promtool, shellcheck). No target hosts needed: this is what CI runs.
+#
+#   ansible-playbook tests/render.yml && ../tests/validate.sh
+- name: Render templates
+  hosts: all
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../vault.example.yml
+  vars:
+    out: "{{ playbook_dir }}/../../build/render/{{ inventory_hostname }}"
+    roles_dir: "{{ playbook_dir }}/../roles"
+    docker_host_external_interface: ens18
+    render_map:
+      routers:
+        - {src: router_network/templates/netplan.yaml.j2, dest: netplan/60-homelab.yaml}
+        - {src: router_network/templates/netplan-validate.sh.j2, dest: sbin/homelab-netplan-validate}
+        - {src: router_network/templates/netplan-commit.sh.j2, dest: sbin/homelab-netplan-commit}
+        - {src: router_network/templates/netplan-rollback.sh.j2, dest: sbin/homelab-netplan-rollback}
+        - {src: router_firewall/templates/nftables.conf.j2, dest: nftables.conf}
+        - {src: router_firewall/templates/nft-commit.sh.j2, dest: sbin/homelab-nft-commit}
+        - {src: router_firewall/templates/nft-rollback.sh.j2, dest: sbin/homelab-nft-rollback}
+        - {src: router_services/templates/dnsmasq.conf.j2, dest: dnsmasq/homelab.conf}
+        - {src: router_services/templates/chrony.conf.j2, dest: chrony/homelab.conf}
+        - {src: router_services/templates/avahi-daemon.conf.j2, dest: avahi/avahi-daemon.conf}
+        - {src: wireguard/templates/wg.conf.j2, dest: wireguard/wg0.conf}
+        - {src: nut_server/templates/ups.conf.j2, dest: nut/ups.conf}
+        - {src: nut_server/templates/upsd.conf.j2, dest: nut/upsd.conf}
+        - {src: nut_server/templates/upsd.users.j2, dest: nut/upsd.users}
+        - {src: nut_server/templates/upsmon.conf.j2, dest: nut/upsmon.conf}
+      hypervisors:
+        - {src: pve_host/templates/interfaces.j2, dest: network/interfaces}
+        - {src: nut_client/templates/upsmon.conf.j2, dest: nut/upsmon.conf}
+      services:
+        - {src: restic_backup/templates/homelab-backup.sh.j2, dest: sbin/homelab-backup}
+        - {src: restic_backup/templates/homelab-restore-test.sh.j2, dest: sbin/homelab-restore-test}
+        - {src: restic_backup/templates/metrics.sh.j2, dest: lib/metrics.sh}
+        - {src: restic_backup/templates/env.j2, dest: restic/env}
+        - {src: restic_backup/templates/ssh_config.j2, dest: restic/ssh_config}
+        - {src: restic_backup/templates/homelab-backup.timer.j2, dest: systemd/homelab-backup.timer}
+        - {src: restic_backup/templates/homelab-restore-test.timer.j2, dest: systemd/homelab-restore-test.timer}
+        - {src: docker_host/templates/daemon.json.j2, dest: docker/daemon.json}
+      monitoring:
+        - {src: docker_host/templates/daemon.json.j2, dest: docker/daemon.json}
+        - {src: docker_host/templates/docker-user-firewall.sh.j2, dest: sbin/docker-user-firewall}
+  # Listed only to load each role's defaults (lowest precedence, same as a real run);
+  # `when: false` skips every task in them.
+  roles:
+    - {role: router_network, when: false}
+    - {role: router_firewall, when: false}
+    - {role: router_services, when: false}
+    - {role: wireguard, when: false}
+    - {role: nut_server, when: false}
+    - {role: nut_client, when: false}
+    - {role: pve_host, when: false}
+    - {role: docker_host, when: false}
+    - {role: stacks, when: false}
+    - {role: restic_backup, when: false}
+  tasks:
+    - name: Collect files for this host's groups
+      ansible.builtin.set_fact:
+        host_files: "{{ group_names | map('extract', render_map) | select('defined') | flatten }}"
+
+    - name: Create output directories
+      ansible.builtin.file:
+        path: "{{ out }}/{{ item.dest | dirname }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ host_files }}"
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Render role templates
+      ansible.builtin.template:
+        src: "{{ roles_dir }}/{{ item.src }}"
+        dest: "{{ out }}/{{ item.dest }}"
+        mode: "0644"
+      loop: "{{ host_files }}"
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Render compose stacks
+      ansible.builtin.include_tasks: tasks/render_stack.yml
+      loop: "{{ (stacks_enabled | default([])) + (['frigate'] if 'services' in group_names else []) }}"
+      loop_control:
+        loop_var: stack

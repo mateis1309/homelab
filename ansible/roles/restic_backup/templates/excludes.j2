@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for pattern in restic_excludes %}
+{{ pattern }}
+{% endfor %}

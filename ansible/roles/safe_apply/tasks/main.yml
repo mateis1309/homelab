@@ -1,0 +1,50 @@
+---
+# Dead man's switch for changes that can cut off the SSH session (firewall, interfaces):
+#   1. arm a systemd timer that runs the rollback script after N seconds
+#   2. apply the change, detached
+#   3. open a NEW SSH connection; only if that works, disarm the timer
+# If the change locks Ansible out, the host restores the previous state on its own.
+
+- name: Check required arguments
+  ansible.builtin.assert:
+    that:
+      - safe_apply_rollback_cmd | length > 0
+      - safe_apply_commit_cmd | length > 0
+    quiet: true
+
+- name: Clear a rollback timer left over from an interrupted run
+  ansible.builtin.systemd_service:
+    name: "{{ safe_apply_unit }}.timer"
+    state: stopped
+  failed_when: false
+
+# Transient units are not known to the systemd module; reset-failed has no module equivalent.
+- name: Reset failed transient units  # noqa: command-instead-of-module
+  ansible.builtin.command: "systemctl reset-failed {{ safe_apply_unit }}.timer {{ safe_apply_unit }}.service"
+  changed_when: false
+  failed_when: false
+
+- name: Arm rollback timer, seconds={{ safe_apply_timeout }}
+  ansible.builtin.command: >-
+    systemd-run --unit={{ safe_apply_unit }} --on-active={{ safe_apply_timeout }}
+    {{ safe_apply_rollback_cmd }}
+  changed_when: true
+
+- name: Apply change (detached)
+  ansible.builtin.command: "{{ safe_apply_commit_cmd }}"
+  async: 60
+  poll: 0
+  changed_when: true
+
+- name: Drop the existing SSH connection so the next task proves new connections work
+  ansible.builtin.meta: reset_connection
+
+- name: Wait until the host is reachable again
+  ansible.builtin.wait_for_connection:
+    delay: 5
+    timeout: "{{ (safe_apply_timeout | int) - 20 }}"
+
+- name: Disarm rollback (change confirmed)
+  ansible.builtin.systemd_service:
+    name: "{{ safe_apply_unit }}.timer"
+    state: stopped

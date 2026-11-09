@@ -1,0 +1,27 @@
+---
+- name: VMs - baseline and hardening (Temper)
+  hosts: vms
+  become: true
+  roles:
+    - role: common
+    - role: hardening
+    - role: node_exporter
+      tags: [monitoring]
+    - role: docker_host
+      tags: [docker]
+
+- name: Services
+  hosts: services
+  become: true
+  roles:
+    - role: stacks
+      tags: [stacks]
+    - role: restic_backup
+      tags: [backup]
+
+- name: Monitoring
+  hosts: monitoring
+  become: true
+  roles:
+    - role: stacks
+      tags: [stacks]

@@ -1,0 +1,52 @@
+---
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Install commit and rollback scripts
+  ansible.builtin.template:
+    src: "{{ item }}.sh.j2"
+    dest: "/usr/local/sbin/homelab-{{ item }}"
+    owner: root
+    group: root
+    mode: "0750"
+  loop: [nft-commit, nft-rollback]
+
+- name: Render ruleset (syntax-checked with nft -c)
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: "{{ router_firewall_staged }}"
+    owner: root
+    group: root
+    mode: "0640"
+    validate: nft -c -f %s
+
+- name: Compare staged and active ruleset
+  ansible.builtin.command: "cmp -s {{ router_firewall_staged }} {{ router_firewall_file }}"
+  register: router_firewall_diff
+  changed_when: false
+  failed_when: false
+
+- name: Apply ruleset with automatic rollback
+  ansible.builtin.include_role:
+    name: safe_apply
+  vars:
+    safe_apply_unit: homelab-rollback-nft
+    safe_apply_rollback_cmd: /usr/local/sbin/homelab-nft-rollback
+    safe_apply_commit_cmd: /usr/local/sbin/homelab-nft-commit
+    safe_apply_timeout: "{{ router_rollback_seconds }}"
+  when:
+    - router_firewall_diff.rc != 0
+    - router_firewall_apply | bool
+
+- name: Load ruleset at boot
+  ansible.builtin.service:
+    name: nftables
+    enabled: true
+  when: router_firewall_apply | bool
+
+- name: Verify the homelab table is loaded
+  ansible.builtin.command: nft list table inet homelab
+  changed_when: false
+  when: router_firewall_apply | bool

@@ -1,0 +1,101 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+# Generated from ansible/inventory/group_vars/all/lab.yml and group_vars/routers.yml.
+# Edit those files, not this one.
+#
+# Only the "homelab" table is replaced, so tables owned by other tools (fail2ban) survive reloads.
+{%- macro iface(zone) -%}
+{%- if zone == 'vpn' -%}"wg0"{%- else -%}"vlan{{ lab_zones[zone].vlan }}"{%- endif -%}
+{%- endmacro -%}
+{%- macro ifaces(zones) -%}
+{ {% for z in zones %}{{ iface(z) }}{{ ", " if not loop.last }}{% endfor %} }
+{%- endmacro -%}
+{%- macro ips(hosts) -%}
+{ {% for h in hosts %}{{ lab_hosts[h].ip }}{{ ", " if not loop.last }}{% endfor %} }
+{%- endmacro -%}
+{%- macro match(rule) -%}
+{%- if rule.proto | default('any') in ['tcp', 'udp'] -%}
+{{ rule.proto }} dport { {{ rule.ports | join(', ') }} }
+{%- elif rule.proto | default('any') == 'icmp' -%}
+meta l4proto icmp
+{%- endif -%}
+{%- endmacro %}
+{% set internal_zones = lab_zones.keys() | list + ['vpn'] %}
+{% set wan = '"' ~ router_wan_interface ~ '"' %}
+
+table inet homelab
+delete table inet homelab
+
+table inet homelab {
+	chain input {
+		type filter hook input priority filter; policy drop;
+		ct state vmap { established : accept, related : accept, invalid : drop }
+		iifname "lo" accept
+
+		# ICMP: everything from inside, rate-limited ping from the WAN
+		iifname {{ ifaces(internal_zones) }} meta l4proto { icmp, ipv6-icmp } accept
+		iifname {{ wan }} icmp type echo-request limit rate 5/second accept
+		meta l4proto ipv6-icmp icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept
+
+		# Core network services for every internal zone
+		iifname {{ ifaces(internal_zones) }} udp dport { 53, 67, 123 } accept comment "dns, dhcp, ntp"
+		iifname {{ ifaces(internal_zones) }} tcp dport 53 accept comment "dns over tcp"
+
+		# WireGuard
+		iifname {{ wan }} udp dport {{ lab_vpn.port }} accept comment "wireguard"
+
+{% for rule in router_input_rules %}
+{% set parts = ['iifname ' ~ ifaces(rule.from)] %}
+{% if rule.from_hosts is defined %}{% set _ = parts.append('ip saddr ' ~ ips(rule.from_hosts)) %}{% endif %}
+{% if match(rule) | length > 0 %}{% set _ = parts.append(match(rule)) %}{% endif %}
+		{{ parts | join(' ') }} accept comment "{{ rule.name }}"
+{% endfor %}
+
+{% if router_firewall_log_drops %}
+		limit rate 10/minute log prefix "nft input drop: "
+{% endif %}
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+		ct state vmap { established : accept, related : accept, invalid : drop }
+
+		# Internet egress (zone flag `internet` in lab.yml)
+{% for name, zone in lab_zones.items() if zone.internet %}
+		iifname {{ iface(name) }} oifname {{ wan }} accept comment "{{ name }} -> internet"
+{% endfor %}
+		iifname "wg0" oifname {{ wan }} accept comment "vpn -> internet"
+
+		# Port forwards (DNAT happens in prerouting; this lets the translated packets through)
+{% for fwd in router_port_forwards %}
+		iifname {{ wan }} ip daddr {{ lab_hosts[fwd.to_host].ip }} {{ fwd.proto }} dport {{ fwd.port }} ct status dnat accept comment "forward {{ fwd.name }}"
+{% endfor %}
+
+		# Inter-zone rules (everything else between zones is dropped)
+{% for rule in router_firewall_rules %}
+{# Same-zone traffic is switched, never routed, so "all" means every OTHER zone. #}
+{% set to_zones = (internal_zones | reject('eq', rule.from) | list) if rule.to == 'all' else [rule.to] %}
+{% set parts = ['iifname ' ~ iface(rule.from), 'oifname ' ~ ifaces(to_zones)] %}
+{% if rule.from_hosts is defined %}{% set _ = parts.append('ip saddr ' ~ ips(rule.from_hosts)) %}{% endif %}
+{% if rule.to_hosts is defined %}{% set _ = parts.append('ip daddr ' ~ ips(rule.to_hosts)) %}{% endif %}
+{% if match(rule) | length > 0 %}{% set _ = parts.append(match(rule)) %}{% endif %}
+		{{ parts | join(' ') }} accept comment "{{ rule.name }}"
+{% endfor %}
+
+{% if router_firewall_log_drops %}
+		limit rate 10/minute log prefix "nft forward drop: "
+{% endif %}
+	}
+
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+{% for fwd in router_port_forwards %}
+		iifname {{ wan }} {{ fwd.proto }} dport {{ fwd.port }} dnat ip to {{ lab_hosts[fwd.to_host].ip }}:{{ fwd.port }} comment "forward {{ fwd.name }}"
+{% endfor %}
+	}
+
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		oifname {{ wan }} masquerade
+	}
+}

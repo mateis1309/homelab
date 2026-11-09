@@ -1,0 +1,30 @@
+---
+- name: Router - baseline and hardening (Temper)
+  hosts: routers
+  become: true
+  roles:
+    - role: common
+    - role: hardening
+
+# Before the one-time VLAN cut-over (router_network_live_apply: false) this only STAGES the new
+# network and firewall config; DNS/DHCP and WireGuard wait until the VLANs exist.
+- name: Router - network, firewall, services
+  hosts: routers
+  become: true
+  roles:
+    - role: router_network
+      tags: [network]
+    # Always rendered and staged; applied only after the VLAN cut-over (router_firewall_apply).
+    - role: router_firewall
+      tags: [firewall]
+    - role: router_services
+      when: router_network_live_apply | bool
+      tags: [dns, dhcp]
+    - role: wireguard
+      when: router_network_live_apply | bool
+      tags: [vpn]
+    - role: nut_server
+      when: router_network_live_apply | bool  # listens on VLAN addresses
+      tags: [ups]
+    - role: node_exporter
+      tags: [monitoring]

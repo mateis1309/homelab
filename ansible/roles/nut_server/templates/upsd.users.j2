@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+[admin]
+  password = {{ nut_admin_password }}
+  actions = SET
+  instcmds = ALL
+
+# upsmon on this router
+[upsmon_local]
+  password = {{ nut_local_password }}
+  upsmon primary
+
+# Linux clients (Proxmox host)
+[upsmon_remote]
+  password = {{ nut_remote_password }}
+  upsmon secondary
+
+# Synology DSM hard-codes this user and password; it is read-only and port 3493
+# is reachable only from mgmt and servers (see router_input_rules).
+[monuser]
+  password = secret
+  upsmon secondary

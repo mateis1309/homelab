@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Snapshot current netplan config, activate the staged file, apply.
+set -euo pipefail
+cd /etc/netplan
+tar -cf {{ router_network_backup }} --ignore-failed-read ./*.yaml 2>/dev/null || true
+mkdir -p /etc/netplan/disabled
+for f in ./*.yaml; do
+  [ -e "$f" ] || continue
+  [ "$f" = "./$(basename {{ router_network_file }})" ] && continue
+  mv "$f" /etc/netplan/disabled/
+done
+install -m 0600 {{ router_network_staged }} {{ router_network_file }}
+netplan apply
