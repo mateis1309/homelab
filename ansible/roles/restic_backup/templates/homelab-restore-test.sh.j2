@@ -14,7 +14,7 @@ set +a
 target="$(mktemp -d {{ restic_scratch_dir }}/restore-test.XXXXXX)"
 last_ok="$(previous_value homelab_restore_test homelab_restore_test_last_success_timestamp_seconds)"
 
-# shellcheck disable=SC2329 # invoked by the EXIT trap
+# shellcheck disable=SC2317,SC2329 # invoked by the EXIT trap
 report() {
   local code=$?
   rm -rf "$target"

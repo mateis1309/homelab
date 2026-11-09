@@ -16,6 +16,8 @@ ansible/inventory/group_vars/all/vault.yml
 vault-password*
 .env
 .env.*
+# ...but the .env TEMPLATES are code (secrets come from the vault at render time)
+!ansible/roles/stacks/templates/**/.env.j2
 *.pem
 *.key
 id_rsa*

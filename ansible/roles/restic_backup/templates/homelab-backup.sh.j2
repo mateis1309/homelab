@@ -12,7 +12,7 @@ set +a
 start=$(date +%s)
 last_ok="$(previous_value homelab_backup homelab_backup_last_success_timestamp_seconds)"
 
-# shellcheck disable=SC2329 # invoked by the EXIT trap
+# shellcheck disable=SC2317,SC2329 # invoked by the EXIT trap
 report() {
   local code=$?
   [ "$code" -eq 0 ] && last_ok=$(date +%s)
