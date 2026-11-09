@@ -109,7 +109,7 @@ jobs:
         run: terraform validate
         working-directory: terraform
 
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@v6
 
       - name: TFLint
         run: |
