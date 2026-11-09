@@ -1,0 +1,17 @@
+# router_firewall
+
+Zone-based nftables firewall and NAT rendered from the lab network model.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `router_firewall_file` | `/etc/nftables.conf` |  |
+| `router_firewall_staged` | `/etc/nftables.conf.staged` |  |
+| `router_firewall_previous` | `/etc/nftables.conf.previous` |  |
+| `router_firewall_log_drops` | `true` |  |
+| `router_firewall_rules` | `[]` |  |
+| `router_input_rules` | `[]` |  |
+| `router_port_forwards` | `[]` |  |
+| `router_rollback_seconds` | `120` |  |
+| `router_firewall_apply` | `"{{ router_network_live_apply \| default(false) }}"` | Stage only until the VLAN interfaces exist (see router_network_live_apply). |
+
+Lab-wide values (zones, hosts, firewall rules, routes) are set in `ansible/inventory/group_vars/`, not here.

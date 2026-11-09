@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Ștefan Matei
+  description: Proxmox VE post-install - repos, VLAN-aware bridge, Terraform API user, cloud-init template
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

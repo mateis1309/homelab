@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Run the restore test weekly
+
+[Timer]
+OnCalendar={{ restic_restore_test_schedule }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

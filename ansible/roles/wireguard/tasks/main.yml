@@ -1,0 +1,43 @@
+---
+- name: Install WireGuard tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+
+- name: Generate server private key (only if missing)
+  ansible.builtin.shell: umask 077 && wg genkey > /etc/wireguard/{{ wireguard_interface }}.key
+  args:
+    creates: /etc/wireguard/{{ wireguard_interface }}.key
+
+- name: Read server public key
+  ansible.builtin.shell: wg pubkey < /etc/wireguard/{{ wireguard_interface }}.key
+  register: wireguard_pubkey
+  changed_when: false
+
+- name: Configure interface and peers
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: /etc/wireguard/{{ wireguard_interface }}.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Reload wireguard
+
+- name: Enable tunnel
+  ansible.builtin.service:
+    name: wg-quick@{{ wireguard_interface }}
+    state: started
+    enabled: true
+
+- name: Retire OpenVPN
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ wireguard_openvpn_units }}"
+  failed_when: false
+  when: wireguard_disable_openvpn | bool
+
+- name: Show server public key for client configs
+  ansible.builtin.debug:
+    msg: "WireGuard server public key: {{ wireguard_pubkey.stdout }}"

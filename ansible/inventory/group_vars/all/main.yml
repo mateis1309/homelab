@@ -1,0 +1,18 @@
+---
+# Connection: every inventory hostname is a key in lab_hosts (lab.yml).
+ansible_host: "{{ lab_hosts[inventory_hostname].ip }}"
+ansible_user: ops
+
+# Temper's `common` role
+common_timezone: Europe/Bucharest
+
+# Monitoring scrapes node_exporter from these addresses (router input chain + host firewalls allow only this)
+lab_monitoring_ip: "{{ lab_hosts['mon-01'].ip }}"
+
+# Derived: zone name -> router address in that zone (always .1), e.g. {mgmt: 10.10.10.1, ...}
+lab_gateways: >-
+  {{ dict(lab_zones.keys() | zip(lab_zones.values() | map(attribute='cidr') | map('regex_replace', '\.0/\d+$', '.1'))) }}
+
+# Public DNS zone used for service hostnames and Let's Encrypt (DNS-01 via Cloudflare).
+# Records only exist internally (split-horizon on the router); nothing is exposed to the internet.
+services_domain: lab.example.com

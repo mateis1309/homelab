@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Shared helper: write a Prometheus textfile atomically (node_exporter must never read half a file).
+write_metric_file() {
+  local name="$1"; shift
+  local tmp
+  tmp="$(mktemp "{{ restic_metrics_dir }}/.${name}.XXXXXX")"
+  printf '%s\n' "$@" > "$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "{{ restic_metrics_dir }}/${name}.prom"
+}
+
+# Keep the previous success timestamp when a run fails, so "time since last success" stays true.
+previous_value() {
+  local file="{{ restic_metrics_dir }}/$1.prom" metric="$2"
+  awk -v m="$metric" '$1 == m { print $2 }' "$file" 2>/dev/null || true
+}

@@ -1,0 +1,114 @@
+---
+- name: Install restic
+  ansible.builtin.apt:
+    name: [restic, sqlite3]
+    state: present
+
+- name: Create directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /root/.ssh, mode: "0700"}
+    - {path: "{{ restic_config_dir }}", mode: "0700"}
+    - {path: "{{ restic_cache_dir }}", mode: "0700"}
+    - {path: "{{ restic_lib_dir }}", mode: "0755"}
+    - {path: "{{ restic_dump_dir }}", mode: "0700"}
+    - {path: "{{ restic_metrics_dir }}", mode: "0755"}
+
+- name: Write repository password
+  ansible.builtin.copy:
+    dest: "{{ restic_config_dir }}/password"
+    content: "{{ restic_password }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Write restic configuration
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - {src: env.j2, dest: "{{ restic_config_dir }}/env"}
+    - {src: excludes.j2, dest: "{{ restic_config_dir }}/excludes"}
+
+# SFTP to the Synology: dedicated key, public half printed for the NAS user's authorized_keys.
+- name: Generate SSH key for the backup repository
+  community.crypto.openssh_keypair:
+    path: "{{ restic_ssh_key }}"
+    type: ed25519
+    comment: "restic@{{ inventory_hostname }}"
+  register: restic_key
+
+- name: Configure SSH for the repository host
+  ansible.builtin.template:
+    src: ssh_config.j2
+    dest: /root/.ssh/config
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Show public key for the NAS
+  ansible.builtin.debug:
+    msg: "Add to the 'restic' user on the NAS (docs/backup.md): {{ restic_key.public_key }} restic@{{ inventory_hostname }}"
+  when: restic_key is changed
+
+- name: Install scripts
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {src: metrics.sh.j2, dest: "{{ restic_lib_dir }}/metrics.sh", mode: "0644"}
+    - {src: homelab-backup.sh.j2, dest: /usr/local/sbin/homelab-backup, mode: "0750"}
+    - {src: homelab-restore-test.sh.j2, dest: /usr/local/sbin/homelab-restore-test, mode: "0750"}
+
+- name: Install systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - homelab-backup.service
+    - homelab-backup.timer
+    - homelab-restore-test.service
+    - homelab-restore-test.timer
+  notify: Reload systemd
+
+- name: Initialise the repository if it does not exist yet
+  ansible.builtin.shell: |
+    set -a; . {{ restic_config_dir }}/env; set +a
+    restic cat config >/dev/null 2>&1 && exit 0
+    restic init && echo CREATED
+  args:
+    executable: /bin/bash
+  register: restic_init
+  changed_when: "'CREATED' in restic_init.stdout"
+  # Fails until the NAS side is set up (docs/backup.md); the timers still get installed.
+  failed_when: false
+
+- name: Warn when the repository is unreachable
+  ansible.builtin.debug:
+    msg: "restic repository not reachable yet: {{ restic_init.stderr | default('') | trim }}"
+  when: restic_init.rc != 0
+
+- name: Flush handlers before enabling timers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: [homelab-backup.timer, homelab-restore-test.timer]

@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+MONITOR {{ nut_ups_name }}@localhost 1 upsmon_local {{ nut_local_password }} primary
+MINSUPPLIES 1
+SHUTDOWNCMD "/sbin/shutdown -h +0"
+POLLFREQ 5
+POLLFREQALERT 5
+# Wait for secondaries (NUC, NAS) to log off before the router powers down: it is the last to go.
+HOSTSYNC 60
+FINALDELAY 5

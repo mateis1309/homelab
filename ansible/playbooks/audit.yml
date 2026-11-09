@@ -1,0 +1,35 @@
+---
+# Temper's read-only audit (SSH, firewall, fail2ban, sysctl) on every managed host,
+# plus lab-specific checks.
+- name: Temper audit
+  hosts: all
+  become: true
+  roles:
+    - role: audit
+
+- name: Router checks
+  hosts: routers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Firewall table is loaded with a default-drop forward chain
+      ansible.builtin.shell: set -o pipefail && nft list chain inet homelab forward | grep -q 'policy drop'
+      args:
+        executable: /bin/bash
+      changed_when: false
+      when: router_network_live_apply | bool
+
+    - name: No rollback timer is pending  # noqa: command-instead-of-module (read-only check)
+      ansible.builtin.command: systemctl is-active homelab-rollback-nft.timer homelab-rollback-netplan.timer
+      register: router_pending_rollback
+      changed_when: false
+      failed_when: "'active' in router_pending_rollback.stdout_lines"
+
+- name: Backup checks
+  hosts: services
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Backup timers are scheduled  # noqa: command-instead-of-module (read-only check)
+      ansible.builtin.command: systemctl is-enabled homelab-backup.timer homelab-restore-test.timer
+      changed_when: false

@@ -1,0 +1,74 @@
+---
+# systemd-resolved's stub listener holds port 53; free it for dnsmasq.
+# The router itself keeps resolving through resolved's upstream list, so apt keeps working.
+- name: Ensure resolved drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Disable the systemd-resolved stub listener
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/10-homelab.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ ansible_managed }}
+      [Resolve]
+      DNSStubListener=no
+      DNS={{ router_dns_upstreams | join(' ') }}
+  notify: Restart systemd-resolved
+
+- name: Point /etc/resolv.conf at the upstream list instead of the stub
+  ansible.builtin.file:
+    src: /run/systemd/resolve/resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: true
+
+- name: Restart resolved now so port 53 is free before dnsmasq starts
+  ansible.builtin.meta: flush_handlers
+
+- name: Install dnsmasq, avahi
+  ansible.builtin.apt:
+    name: [dnsmasq, avahi-daemon]
+    state: present
+
+- name: Configure dnsmasq
+  ansible.builtin.template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.d/homelab.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: dnsmasq --test --conf-file=%s
+  notify: Restart dnsmasq
+
+- name: Serve NTP to the lab
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/conf.d/homelab.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart chrony
+
+- name: Configure mDNS reflector
+  ansible.builtin.template:
+    src: avahi-daemon.conf.j2
+    dest: /etc/avahi/avahi-daemon.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart avahi
+  when: router_mdns_zones | length > 0
+
+- name: Ensure services are running
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: "{{ ['dnsmasq', 'chrony'] + (['avahi-daemon'] if router_mdns_zones | length > 0 else []) }}"

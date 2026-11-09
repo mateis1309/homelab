@@ -1,0 +1,47 @@
+---
+# Every file under templates/<stack>/ is rendered to /opt/stacks/<stack>/ (minus the .j2 suffix).
+- name: Collect templates for {{ stack }}
+  ansible.builtin.set_fact:
+    stacks_tree: "{{ lookup('community.general.filetree', role_path ~ '/templates/' ~ stack, wantlist=True) }}"
+
+- name: Create directories for {{ stack }}
+  ansible.builtin.file:
+    path: "{{ stacks_root }}/{{ stack }}/{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ [{'path': ''}] + (stacks_tree | selectattr('state', 'eq', 'directory') | list) }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Create data directories for {{ stack }}
+  ansible.builtin.file:
+    path: "{{ stacks_root }}/{{ stack }}/{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(0) }}"
+    group: "{{ item.owner | default(0) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop: "{{ stacks_data_dirs[stack] | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Render files for {{ stack }}
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ stacks_root }}/{{ stack }}/{{ item.path | regex_replace('\\.j2$', '') }}"
+    owner: root
+    group: root
+    mode: "{{ '0600' if (item.path | basename).startswith('.env') else '0644' }}"
+  loop: "{{ stacks_tree | selectattr('state', 'eq', 'file') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: stacks_files
+
+- name: Start for {{ stack }}
+  community.docker.docker_compose_v2:
+    project_src: "{{ stacks_root }}/{{ stack }}"
+    state: present
+    pull: missing
+    # Config files are bind-mounted, so a changed file needs a recreate to be picked up.
+    recreate: "{{ 'always' if stacks_files is changed else 'auto' }}"

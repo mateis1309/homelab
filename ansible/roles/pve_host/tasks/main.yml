@@ -1,0 +1,29 @@
+---
+- name: Check this is a Proxmox VE host
+  ansible.builtin.stat:
+    path: /usr/bin/pveversion
+  register: pve_bin
+
+- name: Refuse to run elsewhere
+  ansible.builtin.assert:
+    that: pve_bin.stat.exists
+    fail_msg: "pve_host targets Proxmox VE (installed from the ISO first, see docs/runbooks/bootstrap.md)."
+    quiet: true
+
+- name: Repositories
+  ansible.builtin.import_tasks: repos.yml
+  when: pve_manage_repos | bool
+  tags: [repos]
+
+- name: Network
+  ansible.builtin.import_tasks: network.yml
+  when: pve_manage_network | bool
+  tags: [network]
+
+- name: Terraform API user
+  ansible.builtin.import_tasks: terraform_user.yml
+  tags: [terraform]
+
+- name: Cloud-init template
+  ansible.builtin.import_tasks: template.yml
+  tags: [template]

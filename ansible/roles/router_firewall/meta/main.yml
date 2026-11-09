@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Ștefan Matei
+  description: Zone-based nftables firewall and NAT rendered from the lab network model
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions: [noble]
+dependencies: []

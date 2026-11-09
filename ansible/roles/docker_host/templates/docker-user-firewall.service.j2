@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Restrict access to published container ports (DOCKER-USER)
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/docker-user-firewall
+
+[Install]
+WantedBy=docker.service

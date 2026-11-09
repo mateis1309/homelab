@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Weekly proof that the backups can actually be restored:
+#   restore the latest snapshot to a scratch directory, check that the expected files are there,
+#   check that every database dump opens, and re-read part of the repository data.
+set -euo pipefail
+# shellcheck source=/dev/null
+source {{ restic_lib_dir }}/metrics.sh
+set -a
+# shellcheck source=/dev/null
+source {{ restic_config_dir }}/env
+set +a
+
+target="$(mktemp -d {{ restic_scratch_dir }}/restore-test.XXXXXX)"
+last_ok="$(previous_value homelab_restore_test homelab_restore_test_last_success_timestamp_seconds)"
+
+# shellcheck disable=SC2329 # invoked by the EXIT trap
+report() {
+  local code=$?
+  rm -rf "$target"
+  [ "$code" -eq 0 ] && last_ok=$(date +%s)
+  write_metric_file homelab_restore_test \
+    "# HELP homelab_restore_test_last_exit_code Exit code of the last restore test (0 = success)." \
+    "# TYPE homelab_restore_test_last_exit_code gauge" \
+    "homelab_restore_test_last_exit_code ${code}" \
+    "# HELP homelab_restore_test_last_success_timestamp_seconds Unix time of the last successful restore test." \
+    "# TYPE homelab_restore_test_last_success_timestamp_seconds gauge" \
+    "homelab_restore_test_last_success_timestamp_seconds ${last_ok:-0}"
+}
+trap report EXIT
+
+# Restore only what is checked below, so the test fits in {{ restic_scratch_dir }}.
+restic restore latest --tag scheduled --target "$target" \
+  --include {{ restic_dump_dir }} \
+{% for path in restic_restore_test_paths %}
+  --include {{ path }}{{ " \\" if not loop.last }}
+{% endfor %}
+
+fail=0
+{% for path in restic_restore_test_paths %}
+if [ -e "$target{{ path }}" ]; then echo "ok      {{ path }}"; else echo "MISSING {{ path }}"; fail=1; fi
+{% endfor %}
+
+{% for d in restic_db_dumps %}
+{% if d.type == 'postgres' %}
+f="$target{{ restic_dump_dir }}/{{ d.name }}.sql.gz"
+# grep -c reads the whole stream (grep -q would exit early and trip pipefail with SIGPIPE).
+if gzip -t "$f" && [ "$(zcat "$f" | grep -c 'PostgreSQL database dump complete')" -ge 1 ]; then
+  echo "ok      {{ d.name }} dump"
+else
+  echo "BROKEN  {{ d.name }} dump"; fail=1
+fi
+{% elif d.type == 'sqlite' %}
+f="$target{{ restic_dump_dir }}/{{ d.name }}.sqlite3"
+if [ "$(sqlite3 "$f" 'PRAGMA integrity_check;')" = "ok" ]; then
+  echo "ok      {{ d.name }} database"
+else
+  echo "BROKEN  {{ d.name }} database"; fail=1
+fi
+{% endif %}
+{% endfor %}
+
+restic check --read-data-subset={{ restic_check_read_subset }}
+
+exit "$fail"

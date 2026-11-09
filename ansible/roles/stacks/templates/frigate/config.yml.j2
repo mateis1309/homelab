@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+tls:
+  enabled: false # TLS terminates at Traefik
+
+mqtt:
+  enabled: false
+
+detectors:
+  cpu:
+    type: cpu
+
+record:
+  enabled: true
+  retain:
+    days: {{ frigate_record_retain_days }}
+    mode: motion
+
+cameras:
+{% for cam in frigate_cameras %}
+  {{ cam.name }}:
+    ffmpeg:
+      inputs:
+        - path: "{{ cam.rtsp }}"
+          roles: [detect, record]
+    detect:
+      enabled: true
+{% else %}
+  {}
+{% endfor %}

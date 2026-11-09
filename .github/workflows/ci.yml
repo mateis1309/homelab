@@ -1,0 +1,120 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (yamllint, ansible-lint, syntax)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: pip install -r requirements-dev.txt
+
+      - name: Install collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: yamllint
+        run: yamllint -c .yamllint ansible .github
+
+      - name: ansible-lint
+        run: ansible-lint
+        working-directory: ansible
+
+      - name: Syntax check
+        run: for p in playbooks/*.yml tests/*.yml; do ansible-playbook --syntax-check "$p"; done
+        working-directory: ansible
+
+  render:
+    name: Render + validate with real tools
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: |
+          pip install -r requirements-dev.txt
+          sudo apt-get update
+          sudo apt-get install -y nftables dnsmasq-base netplan.io shellcheck restic sqlite3
+
+      - name: Install collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Render every template with the real inventory
+        run: ansible-playbook tests/render.yml
+        working-directory: ansible
+
+      - name: Validate (nft -c, dnsmasq --test, netplan generate, compose config, promtool, amtool, shellcheck)
+        run: tests/validate.sh
+
+      - name: Backup + restore test, end to end
+        run: ansible-playbook tests/backup_e2e.yml
+        working-directory: ansible
+
+      - name: Upload rendered files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-config
+          path: build/render
+          retention-days: 7
+
+  terraform:
+    name: Terraform (fmt, validate, tflint)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Format check
+        run: terraform fmt -check -recursive -diff
+        working-directory: terraform
+
+      # main.tf reads the default SSH public key path; give the runner one.
+      - name: Throwaway SSH key
+        run: ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/id_ed25519
+
+      - name: Init (no backend)
+        run: terraform init -backend=false -input=false
+        working-directory: terraform
+
+      - name: Validate
+        run: terraform validate
+        working-directory: terraform
+
+      - uses: terraform-linters/setup-tflint@v4
+
+      - name: TFLint
+        run: |
+          tflint --init
+          tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl"
+        working-directory: terraform
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

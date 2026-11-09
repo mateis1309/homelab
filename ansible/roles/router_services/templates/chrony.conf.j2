@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Serve time to every zone (cameras have no internet and depend on this).
+{% for name, zone in lab_zones.items() %}
+allow {{ zone.cidr }}
+{% endfor %}
+allow {{ lab_vpn.cidr }}

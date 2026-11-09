@@ -1,0 +1,13 @@
+---
+# Full run, in dependency order. Terraform (make vms) sits between hypervisor and vms.
+- name: Router
+  ansible.builtin.import_playbook: router.yml
+
+- name: Hypervisor
+  ansible.builtin.import_playbook: hypervisor.yml
+
+- name: VMs (services + monitoring)
+  ansible.builtin.import_playbook: vms.yml
+
+- name: Audit
+  ansible.builtin.import_playbook: audit.yml

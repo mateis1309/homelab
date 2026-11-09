@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+set -euo pipefail
+logger -t homelab-rollback "Restoring previous nftables ruleset"
+install -m 0755 {{ router_firewall_previous }} {{ router_firewall_file }}
+nft -f {{ router_firewall_file }}

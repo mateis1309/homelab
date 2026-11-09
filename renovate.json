@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["custom.regex", "terraform"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Container image versions pinned in group_vars/all/versions.yml",
+      "managerFilePatterns": ["/^ansible/inventory/group_vars/all/versions\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[a-z_]+: \"?(?<currentValue>[^\"\\s]+)\"?"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Group monitoring images into one PR",
+      "matchPackageNames": ["docker.io/prom/**", "docker.io/grafana/grafana"],
+      "groupName": "monitoring stack"
+    },
+    {
+      "description": "Major versions of the databases need a dump/restore, never automerge",
+      "matchPackageNames": ["docker.io/library/postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ]
+}

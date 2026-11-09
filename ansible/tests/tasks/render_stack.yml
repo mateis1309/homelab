@@ -1,0 +1,23 @@
+---
+# Same file walk as roles/stacks/tasks/stack.yml, written under build/render/<host>/stacks/.
+- name: Collect templates for {{ stack }}
+  ansible.builtin.set_fact:
+    stacks_tree: "{{ lookup('community.general.filetree', roles_dir ~ '/stacks/templates/' ~ stack, wantlist=True) }}"
+
+- name: Create directories for {{ stack }}
+  ansible.builtin.file:
+    path: "{{ out }}/stacks/{{ stack }}/{{ item.path }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ [{'path': ''}] + (stacks_tree | selectattr('state', 'eq', 'directory') | list) }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Render for {{ stack }}
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ out }}/stacks/{{ stack }}/{{ item.path | regex_replace('\\.j2$', '') }}"
+    mode: "0644"
+  loop: "{{ stacks_tree | selectattr('state', 'eq', 'file') | list }}"
+  loop_control:
+    label: "{{ item.path }}"

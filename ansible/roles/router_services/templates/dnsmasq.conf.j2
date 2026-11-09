@@ -1,0 +1,49 @@
+# {{ ansible_managed }}
+# Generated from ansible/inventory/group_vars/all/lab.yml
+
+# --- Listening ---
+{% for name, zone in lab_zones.items() %}
+interface=vlan{{ zone.vlan }}
+{% endfor %}
+interface=wg0
+except-interface={{ router_wan_interface }}
+bind-dynamic
+no-dhcp-interface=wg0
+
+# --- DNS ---
+domain-needed
+bogus-priv
+no-resolv
+{% for server in router_dns_upstreams %}
+server={{ server }}
+{% endfor %}
+cache-size=10000
+domain={{ lab_domain }}
+local=/{{ lab_domain }}/
+expand-hosts
+{% if router_dns_service_domain %}
+# Split-horizon: service hostnames resolve to the reverse proxy, inside the lab only
+address=/{{ router_dns_service_domain }}/{{ router_dns_service_target }}
+{% endif %}
+
+# Static hosts (A + PTR)
+{% for name, host in lab_hosts.items() %}
+host-record={{ name }}.{{ lab_domain }},{{ name }},{{ host.ip }}
+{% endfor %}
+
+# --- DHCP ---
+dhcp-authoritative
+dhcp-rapid-commit
+{% for name, zone in lab_zones.items() %}
+{% set net = zone.cidr.split('/')[0].rsplit('.', 1)[0] %}
+# {{ name }} (VLAN {{ zone.vlan }})
+dhcp-range=set:{{ name }},{{ net }}.{{ router_dhcp_range_start }},{{ net }}.{{ router_dhcp_range_end }},255.255.255.0,{{ router_dhcp_lease_time }}
+dhcp-option=tag:{{ name }},option:router,{{ lab_gateways[name] }}
+dhcp-option=tag:{{ name }},option:dns-server,{{ lab_gateways[name] }}
+dhcp-option=tag:{{ name }},option:ntp-server,{{ lab_gateways[name] }}
+{% endfor %}
+
+# Reservations for hosts that boot from DHCP
+{% for name, host in lab_hosts.items() if host.mac is defined %}
+dhcp-host={{ host.mac }},{{ name }},{{ host.ip }}
+{% endfor %}

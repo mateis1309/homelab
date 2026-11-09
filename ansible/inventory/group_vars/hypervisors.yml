@@ -1,0 +1,6 @@
+---
+# Proxmox has its own firewall layer; the router does the network policy. Skip UFW here.
+hardening_ufw_enabled: false
+audit_check_firewall: false
+
+nut_server: "{{ lab_gateways['mgmt'] }}"

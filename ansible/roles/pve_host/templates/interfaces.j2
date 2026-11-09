@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+# One NIC, plugged into a switch trunk port: VLAN {{ pve_mgmt_vlan }} (mgmt) untagged for the host,
+# every other VLAN tagged and handed to VMs through the VLAN-aware bridge.
+auto lo
+iface lo inet loopback
+
+iface {{ pve_nic }} inet manual
+
+auto {{ pve_bridge }}
+iface {{ pve_bridge }} inet static
+    address {{ lab_hosts['pve'].ip }}/{{ lab_zones['mgmt'].cidr.split('/')[1] }}
+    gateway {{ lab_gateways['mgmt'] }}
+    bridge-ports {{ pve_nic }}
+    bridge-stp off
+    bridge-fd 0
+    bridge-vlan-aware yes
+    bridge-vids 2-4094
+
+source /etc/network/interfaces.d/*

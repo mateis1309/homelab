@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Weekly restore test of the latest restic snapshot
+Wants=network-online.target
+After=network-online.target homelab-backup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-restore-test
+Nice=10
+IOSchedulingClass=idle

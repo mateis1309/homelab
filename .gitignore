@@ -1,0 +1,39 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
+terraform.tfvars
+*.auto.tfvars
+*.tfvars.json
+
+# Secrets: the real vault is never committed (see ansible/vault.example.yml)
+ansible/inventory/group_vars/all/vault.yml
+.vault_pass*
+vault-password*
+.env
+.env.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+wg-*.conf
+
+# Generated
+build/
+ansible/reports/*.json
+*.retry
+.ansible/
+
+# Python / editors
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~

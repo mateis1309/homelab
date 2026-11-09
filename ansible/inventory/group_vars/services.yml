@@ -1,0 +1,40 @@
+---
+# Temper hardening: open the reverse proxy ports
+hardening_ufw_allowed_tcp_ports: [80, 443]
+
+# Frigate (NVR for the PoE cameras) stays out until the cameras are re-terminated.
+# Adding it here also adds its route (nvr.<domain>) to Traefik.
+stacks_enabled: [traefik, authentik, vaultwarden, paperless]
+
+# Hostnames under services_domain, all on Traefik. forward_auth puts authentik login in front.
+traefik_routes:
+  - {name: auth, url: "http://authentik-server:9000"}
+  - {name: vault, url: "http://vaultwarden:80"}
+  - {name: docs, url: "http://paperless:8000"}
+  - {name: grafana, url: "http://{{ lab_hosts['mon-01'].ip }}:3000"}
+  - {name: status, url: "http://{{ lab_hosts['mon-01'].ip }}:3001", forward_auth: true}
+  - {name: prometheus, url: "http://{{ lab_hosts['mon-01'].ip }}:9090", forward_auth: true}
+  - {name: alerts, url: "http://{{ lab_hosts['mon-01'].ip }}:9093", forward_auth: true}
+traefik_acme_email: admin@{{ services_domain }}
+
+paperless_ocr_language: ron+eng
+
+frigate_record_retain_days: 7
+frigate_cameras: [] # e.g. [{name: front, rtsp: "{{ vault_frigate_rtsp_front }}"}]
+
+# --- Backups (restic -> Synology over SFTP) ---
+restic_repository: "sftp:restic@{{ lab_hosts['nas-primary'].ip }}:/restic/{{ inventory_hostname }}"
+restic_backup_paths: [/opt/stacks, /opt/backup/dumps]
+restic_excludes:
+  - /opt/stacks/*/postgres # consistent dumps are taken instead of copying live database files
+  - /opt/stacks/*/valkey
+  - /opt/stacks/frigate/media # camera footage is short-lived by design
+restic_db_dumps:
+  - {name: authentik, type: postgres, container: authentik-postgresql, user: authentik, db: authentik}
+  - {name: paperless, type: postgres, container: paperless-db, user: paperless, db: paperless}
+  - {name: vaultwarden, type: sqlite, path: /opt/stacks/vaultwarden/data/db.sqlite3}
+# Files that must exist in a restored snapshot for the weekly restore test to pass
+restic_restore_test_paths:
+  - /opt/stacks/traefik/traefik.yml
+  - /opt/stacks/vaultwarden/data
+  - /opt/stacks/paperless/media

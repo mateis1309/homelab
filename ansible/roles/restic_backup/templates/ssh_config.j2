@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+Host {{ restic_repository | regex_replace('^sftp:[^@]+@([^:]+):.*$', '\\1') }}
+  IdentityFile {{ restic_ssh_key }}
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new
+  ServerAliveInterval 30

@@ -1,0 +1,62 @@
+# {{ ansible_managed }}
+# Based on the upstream compose file for {{ authentik_version }}, minus the Docker socket:
+# the embedded outpost is enough for forward auth, and the socket is root on the host.
+services:
+  postgresql:
+    image: docker.io/library/postgres:16-alpine
+    container_name: authentik-postgresql
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${PG_PASS:?database password required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
+      interval: 30s
+      retries: 5
+      start_period: 20s
+      timeout: 5s
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+
+  server:
+    image: ghcr.io/goauthentik/server:{{ authentik_version }}
+    container_name: authentik-server
+    command: server
+    restart: unless-stopped
+    shm_size: 512mb
+    env_file: .env
+    environment: &authentik-env
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?secret key required}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    volumes:
+      - ./data:/data
+      - ./custom-templates:/templates
+    networks: [default, proxy]
+
+  worker:
+    image: ghcr.io/goauthentik/server:{{ authentik_version }}
+    container_name: authentik-worker
+    command: worker
+    restart: unless-stopped
+    shm_size: 512mb
+    env_file: .env
+    environment: *authentik-env
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    volumes:
+      - ./data:/data
+      - ./custom-templates:/templates
+
+networks:
+  proxy:
+    external: true

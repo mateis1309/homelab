@@ -1,0 +1,29 @@
+---
+- name: Install NUT client
+  ansible.builtin.apt:
+    name: nut-client
+    state: present
+
+- name: Set NUT mode
+  ansible.builtin.copy:
+    dest: /etc/nut/nut.conf
+    content: "# {{ ansible_managed }}\nMODE=netclient\n"
+    owner: root
+    group: nut
+    mode: "0640"
+  notify: Restart nut-monitor
+
+- name: Configure upsmon
+  ansible.builtin.template:
+    src: upsmon.conf.j2
+    dest: /etc/nut/upsmon.conf
+    owner: root
+    group: nut
+    mode: "0640"
+  notify: Restart nut-monitor
+
+- name: Ensure upsmon is running
+  ansible.builtin.service:
+    name: nut-monitor
+    state: started
+    enabled: true

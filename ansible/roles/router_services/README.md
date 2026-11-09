@@ -1,0 +1,15 @@
+# router_services
+
+DNS + DHCP (dnsmasq), NTP server (chrony) and mDNS reflector (avahi) per zone.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `router_dns_upstreams` | `[9.9.9.9, 149.112.112.112]` |  |
+| `router_dhcp_lease_time` | `12h` |  |
+| `router_dns_service_domain` | `""` |  |
+| `router_dns_service_target` | `""` |  |
+| `router_mdns_zones` | `[]` |  |
+| `router_dhcp_range_start` | `100` | DHCP pool inside each /24 |
+| `router_dhcp_range_end` | `199` |  |
+
+Lab-wide values (zones, hosts, firewall rules, routes) are set in `ansible/inventory/group_vars/`, not here.

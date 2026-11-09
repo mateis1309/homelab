@@ -1,0 +1,15 @@
+---
+profile: moderate
+exclude_paths:
+  - reports/
+  - ../vendor/
+  - ../build/
+# Temper's roles are linted in the Temper repository.
+mock_roles:
+  - common
+  - hardening
+  - audit
+skip_list:
+  # Roles here share one lab-wide variable namespace on purpose: router_*, nut_*, restic_* and
+  # the per-application vars are set once in inventory/group_vars and read by several roles.
+  - var-naming[no-role-prefix]

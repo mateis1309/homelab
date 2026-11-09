@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Nightly backup: consistent database dumps, then restic, then retention. Reports to Prometheus.
+set -euo pipefail
+# shellcheck source=/dev/null
+source {{ restic_lib_dir }}/metrics.sh
+set -a
+# shellcheck source=/dev/null
+source {{ restic_config_dir }}/env
+set +a
+
+start=$(date +%s)
+last_ok="$(previous_value homelab_backup homelab_backup_last_success_timestamp_seconds)"
+
+# shellcheck disable=SC2329 # invoked by the EXIT trap
+report() {
+  local code=$?
+  [ "$code" -eq 0 ] && last_ok=$(date +%s)
+  write_metric_file homelab_backup \
+    "# HELP homelab_backup_last_exit_code Exit code of the last backup run (0 = success)." \
+    "# TYPE homelab_backup_last_exit_code gauge" \
+    "homelab_backup_last_exit_code ${code}" \
+    "# HELP homelab_backup_last_success_timestamp_seconds Unix time of the last successful backup." \
+    "# TYPE homelab_backup_last_success_timestamp_seconds gauge" \
+    "homelab_backup_last_success_timestamp_seconds ${last_ok:-0}" \
+    "# HELP homelab_backup_duration_seconds Duration of the last backup run." \
+    "# TYPE homelab_backup_duration_seconds gauge" \
+    "homelab_backup_duration_seconds $(( $(date +%s) - start ))"
+}
+trap report EXIT
+
+install -d -m 0700 {{ restic_dump_dir }}
+
+# 1. Database dumps (copying live database files gives a backup that may not open).
+{% for d in restic_db_dumps %}
+{% if d.type == 'postgres' %}
+echo "dump {{ d.name }} (postgres)"
+docker exec {{ d.container }} pg_dump -U {{ d.user }} --clean --if-exists {{ d.db }} \
+  | gzip > {{ restic_dump_dir }}/{{ d.name }}.sql.gz.tmp
+mv {{ restic_dump_dir }}/{{ d.name }}.sql.gz.tmp {{ restic_dump_dir }}/{{ d.name }}.sql.gz
+{% elif d.type == 'sqlite' %}
+echo "dump {{ d.name }} (sqlite)"
+sqlite3 {{ d.path }} ".backup '{{ restic_dump_dir }}/{{ d.name }}.sqlite3'"
+{% endif %}
+{% endfor %}
+
+# 2. Snapshot
+restic backup --tag scheduled --exclude-file {{ restic_config_dir }}/excludes \
+{% for path in restic_backup_paths %}
+  {{ path }}{{ " \\" if not loop.last }}
+{% endfor %}
+
+# 3. Retention
+restic forget --prune --tag scheduled \
+  --keep-daily {{ restic_keep_daily }} \
+  --keep-weekly {{ restic_keep_weekly }} \
+  --keep-monthly {{ restic_keep_monthly }}

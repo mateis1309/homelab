@@ -1,0 +1,4 @@
+---
+nut_ups_name: ups
+nut_server: 10.10.10.1
+nut_remote_password: "{{ vault_nut_remote_password }}"

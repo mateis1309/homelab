@@ -1,0 +1,6 @@
+---
+- name: Restart nut
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: restarted
+  loop: [nut-driver-enumerator, nut-server, nut-monitor]

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Restore the netplan files captured by homelab-netplan-commit and re-apply.
+set -euo pipefail
+logger -t homelab-rollback "Restoring previous netplan configuration"
+rm -f /etc/netplan/*.yaml
+tar -xf {{ router_network_backup }} -C /etc/netplan
+netplan apply

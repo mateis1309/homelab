@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Ștefan Matei
+  description: WireGuard remote access; the server private key never leaves the router
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions: [noble]
+dependencies: []

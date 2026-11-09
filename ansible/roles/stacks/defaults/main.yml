@@ -1,0 +1,38 @@
+---
+stacks_root: /opt/stacks
+stacks_enabled: []
+
+# Bind-mounted data directories (created before first start, with the owner the image runs as).
+stacks_data_dirs:
+  traefik:
+    - {path: acme, mode: "0700"}
+  authentik:
+    - {path: data, owner: 1000}
+    - {path: custom-templates, owner: 1000}
+    - {path: postgres}
+  vaultwarden:
+    - {path: data}
+  paperless:
+    - {path: data, owner: 1000}
+    - {path: media, owner: 1000}
+    - {path: consume, owner: 1000}
+    - {path: export, owner: 1000}
+    - {path: postgres}
+    - {path: valkey}
+  frigate:
+    - {path: media}
+  monitoring:
+    - {path: prometheus-data, owner: 65534}
+    - {path: alertmanager-data, owner: 65534}
+    - {path: grafana-data, owner: 472}
+    - {path: uptime-kuma-data}
+
+traefik_routes: []
+traefik_acme_email: ""
+paperless_ocr_language: eng
+frigate_record_retain_days: 7
+frigate_cameras: []
+monitoring_node_targets: []
+monitoring_backup_hosts: []
+monitoring_backup_max_age_hours: 36
+monitoring_restore_test_max_age_days: 8

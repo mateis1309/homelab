@@ -1,0 +1,39 @@
+---
+# Template for ansible/inventory/group_vars/all/vault.yml (git-ignored).
+#   cp ansible/vault.example.yml ansible/inventory/group_vars/all/vault.yml
+#   ansible-vault encrypt ansible/inventory/group_vars/all/vault.yml
+# CI renders every template with this file, so keep every key here, with dummy values.
+
+# UPS (NUT)
+vault_nut_admin_password: CHANGE_ME
+vault_nut_local_password: CHANGE_ME
+vault_nut_remote_password: CHANGE_ME
+
+# Backups
+vault_restic_password: CHANGE_ME
+
+# Traefik / Let's Encrypt (Cloudflare API token, Zone:DNS:Edit on the services domain only)
+vault_cloudflare_dns_token: CHANGE_ME
+
+# authentik
+vault_authentik_pg_password: CHANGE_ME
+vault_authentik_secret_key: CHANGE_ME_50_RANDOM_CHARS
+
+# Vaultwarden admin token, as an Argon2 PHC string: docker run --rm -it vaultwarden/server /vaultwarden hash
+vault_vaultwarden_admin_token_hash: "$argon2id$v=19$m=65540,t=3,p=4$CHANGE_ME"
+
+# Paperless
+vault_paperless_db_password: CHANGE_ME
+vault_paperless_secret_key: CHANGE_ME
+vault_paperless_oidc_client_secret: CHANGE_ME
+
+# Grafana
+vault_grafana_admin_password: CHANGE_ME
+vault_grafana_oauth_client_secret: CHANGE_ME
+
+# Alertmanager -> Telegram
+vault_alertmanager_telegram_bot_token: "123456:CHANGE_ME"
+vault_alertmanager_telegram_chat_id: 123456789
+
+# Frigate cameras (only if the frigate stack is enabled)
+vault_frigate_rtsp_front: "rtsp://user:CHANGE_ME@10.10.50.101:554/stream1"

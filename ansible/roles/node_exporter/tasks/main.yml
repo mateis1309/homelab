@@ -1,0 +1,21 @@
+---
+# The Debian/Ubuntu package already enables the textfile collector on
+# /var/lib/prometheus/node-exporter; backup jobs drop *.prom files there.
+- name: Install node_exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+
+- name: Ensure textfile collector directory exists
+  ansible.builtin.file:
+    path: /var/lib/prometheus/node-exporter
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure node_exporter is running
+  ansible.builtin.service:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true

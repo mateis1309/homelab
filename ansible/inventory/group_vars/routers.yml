@@ -1,0 +1,77 @@
+---
+# --- Physical interfaces (Supermicro A2SDI-4C4L-FIO: four Intel i210/X553 ports) ---
+# Check names with `ip -br link` on the router before the first apply.
+router_wan_interface: eno1
+router_lan_bond_members: [eno2, eno3, eno4]
+router_lan_bond_name: bond0
+# Keep false until the one-time cut-over from the console (docs/runbooks/bootstrap.md).
+router_network_live_apply: false
+
+# --- DNS / DHCP (dnsmasq) ---
+router_dns_upstreams: [9.9.9.9, 149.112.112.112] # Quad9, malware-filtering
+router_dhcp_lease_time: 12h
+# Services behind Traefik on svc-01 resolve internally to svc-01 (split-horizon).
+router_dns_service_domain: "{{ services_domain }}"
+router_dns_service_target: "{{ lab_hosts['svc-01'].ip }}"
+# Zones whose clients take part in the mDNS reflector (casting from phones to the Chromecast).
+router_mdns_zones: [trusted, iot]
+
+# --- Firewall ---
+# Zone flags in lab.yml decide internet access. Everything between zones is denied
+# unless listed here. `to_hosts` / `from_hosts` narrow a rule to single hosts.
+router_firewall_rules:
+  # Admin zones reach everything.
+  - {name: mgmt-to-all, from: mgmt, to: all}
+  - {name: vpn-to-all, from: vpn, to: all}
+
+  # Personal devices -> services
+  - {name: web-apps, from: trusted, to: servers, to_hosts: [svc-01], proto: tcp, ports: [80, 443]}
+  - {name: nas-files, from: trusted, to: servers, to_hosts: [nas-primary], proto: tcp, ports: [445, 5001]}
+  - {name: minecraft-lan, from: trusted, to: servers, to_hosts: [minecraft], proto: tcp, ports: [25565]}
+  - {name: openhab-ui, from: trusted, to: iot, to_hosts: [openhab], proto: tcp, ports: [8080, 8443]}
+  - {name: chromecast-control, from: trusted, to: iot, proto: tcp, ports: [8008, 8009, 8443]}
+
+  # Servers -> other zones. Traffic between two hosts in the SAME zone is switched and never
+  # reaches the router; it is filtered on the hosts themselves (UFW, DOCKER-USER, NAS firewall).
+  - {name: nas-replication, from: servers, from_hosts: [nas-primary], to: backup, to_hosts: [nas-backup], proto: tcp, ports: [873]}
+  - {name: nvr-to-cameras, from: servers, from_hosts: [svc-01], to: cameras, proto: tcp, ports: [80, 554]}
+  - {name: metrics-scrape, from: servers, from_hosts: [mon-01], to: all, proto: tcp, ports: [9100]}
+  - {name: metrics-ping, from: servers, from_hosts: [mon-01], to: all, proto: icmp}
+
+# Port forwards from the WAN.
+router_port_forwards:
+  - {name: minecraft, proto: tcp, port: 25565, to_host: minecraft}
+
+# Services on the router itself, per source zone (DHCP, DNS and NTP are open to every zone).
+router_input_rules:
+  - {name: ssh-admin, from: [mgmt, vpn], proto: tcp, ports: [22]}
+  # Admin access from home goes through WireGuard too, so the laptop can stay on "trusted".
+  - {name: wireguard-lan, from: [trusted], proto: udp, ports: [51820]}
+  - {name: nut, from: [mgmt, servers], proto: tcp, ports: [3493]}
+  - {name: mdns, from: "{{ router_mdns_zones }}", proto: udp, ports: [5353]}
+  - {name: node-exporter, from: [servers], from_hosts: [mon-01], proto: tcp, ports: [9100]}
+
+# Seconds before a firewall or network change is rolled back if Ansible cannot reconnect.
+router_rollback_seconds: 120
+
+# --- WireGuard ---
+wireguard_address: "{{ lab_vpn.cidr | regex_replace('\\.0/', '.1/') }}"
+wireguard_port: "{{ lab_vpn.port }}"
+wireguard_peers:
+  - name: laptop
+    public_key: REPLACE_WITH_PEER_PUBLIC_KEY_laptop000000000=
+    ip: 10.10.99.10
+  - name: phone
+    public_key: REPLACE_WITH_PEER_PUBLIC_KEY_phone00000000000=
+    ip: 10.10.99.11
+# Set true once every peer has moved off OpenVPN.
+wireguard_disable_openvpn: false
+
+# --- UPS (CyberPower on USB) ---
+nut_ups_name: ups # Synology DSM only accepts a UPS named "ups"
+nut_ups_description: CyberPower (rack)
+nut_listen: ["127.0.0.1", "{{ lab_gateways.mgmt }}", "{{ lab_gateways.servers }}"]
+
+# --- Temper overrides: the router uses its own nftables ruleset, not UFW ---
+hardening_ufw_enabled: false
+audit_check_firewall: false
