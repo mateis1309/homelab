@@ -15,4 +15,5 @@ lab_gateways: >-
 
 # Public DNS zone used for service hostnames and Let's Encrypt (DNS-01 via Cloudflare).
 # Records only exist internally (split-horizon on the router); nothing is exposed to the internet.
+# The real domain is redacted in the published copy of this repository.
 services_domain: lab.example.com

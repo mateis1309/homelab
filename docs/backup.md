@@ -65,12 +65,7 @@ test expects, back up again, and check that the restore test now **fails**, repo
 success timestamp.
 
 The NAS-side copies (Hyper Backup) are checked by hand once a quarter. Use Hyper Backup Explorer to restore one
-folder and one file from each destination to a scratch share, then record the date below.
-
-| Date | Destination | Restored | Result |
-|---|---|---|---|
-| | NAS326 | | |
-| | Backblaze B2 | | |
+folder and one file from each destination to a scratch share and compare them with the originals.
 
 ## NAS setup (DSM and NAS326 web UIs)
 

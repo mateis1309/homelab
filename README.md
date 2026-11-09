@@ -9,6 +9,15 @@ restore-tested every week. Everything runs on second-hand hardware and free soft
 
 It is also where I try out what I recommend to small organisations before recommending it.
 
+<p align="center">
+  <img src="docs/images/rack.jpg" alt="The wall-mounted rack: UPS, audio amplifier and PoE switch on top; Supermicro router, patch panels and the 52-port core switch below" width="420">
+</p>
+<p align="center"><sub>
+  <b>Top shelf:</b> CyberPower UPS, whole-home audio amplifier, PoE switch for the cameras.
+  <b>Bottom shelf:</b> Supermicro router (3-port LACP trunk to the switch), patch panels and the D-Link 52-port core switch.
+  Every one of the ~30 wall drops in the house ends on these patch panels.
+</sub></p>
+
 - **One source of truth.** VLANs, subnets, hosts and VM sizes live in a single file,
   [`lab.yml`](ansible/inventory/group_vars/all/lab.yml). Ansible renders the router, DNS/DHCP and firewall from it,
   and Terraform reads the *same file* to create the VMs.
@@ -79,22 +88,20 @@ Full policy, IP plan and switch port map: [docs/network.md](docs/network.md).
 
 Known risks of the second-hand gear (Atom C2000 defect, NAS326 end of life) and how they're handled: [docs/hardware.md](docs/hardware.md).
 
-## Status
+## What's running
 
-The code is complete and CI-tested; the rollout to the hardware happens in this order. The last column is ticked as each step goes live.
+| Layer | Running | Status |
+|---|---|---|
+| Network | 7 VLANs on the D-Link + Netgear, LACP trunk, zone firewall (nftables) on the router | 🟢 live |
+| Core services | dnsmasq (DNS/DHCP per VLAN), chrony (NTP), mDNS reflector, WireGuard | 🟢 live |
+| Power | NUT on the router; Proxmox host and DS1815+ shut down cleanly on low battery | 🟢 live |
+| Compute | Proxmox VE on the NUC; `svc-01` and `mon-01` created by Terraform | 🟢 live |
+| Apps (svc-01) | Traefik, authentik (SSO + 2FA), Vaultwarden, Paperless-ngx | 🟢 live |
+| Backups | restic → DS1815+ nightly, weekly restore test; Hyper Backup → NAS326 + Backblaze B2 | 🟢 live |
+| Monitoring (mon-01) | Prometheus, Alertmanager → Telegram, Grafana, Uptime Kuma | 🟢 live |
 
-| Step | What | Code | Live |
-|---|---|---|---|
-| 1 | VLANs on the switches, router netplan + nftables cut-over | ✅ | ☐ |
-| 2 | dnsmasq/chrony/mDNS, WireGuard (OpenVPN retired) | ✅ | ☐ |
-| 3 | UPS: NUT server on router, NUC and DS1815+ as clients | ✅ | ☐ |
-| 4 | Proxmox post-install, cloud-init template, Terraform VMs | ✅ | ☐ |
-| 5 | svc-01: Traefik, authentik, Vaultwarden, Paperless-ngx | ✅ | ☐ |
-| 6 | Backups: restic → DS1815+, Hyper Backup → NAS326 + off-site | ✅ | ☐ |
-| 7 | mon-01: Prometheus, Alertmanager → Telegram, Grafana, Uptime Kuma | ✅ | ☐ |
-| 8 | Frigate for the PoE cameras (after re-terminating the cabling) | ✅ | ☐ |
-
-Next: [docs/roadmap.md](docs/roadmap.md).
+The Frigate stack (NVR for the PoE cameras) is in the repo and switched on by adding it to `stacks_enabled`.
+What's next: [docs/roadmap.md](docs/roadmap.md).
 
 ## Quick start
 
@@ -109,7 +116,7 @@ make test          # render + validate everything locally; no hardware needed
 make router        # then: hypervisor, vms, services, audit (or `make deploy`)
 ```
 
-First-time rollout, including the one step that has to be done at the console: [docs/runbooks/bootstrap.md](docs/runbooks/bootstrap.md).
+Rebuilding from bare metal, including the one step that has to be done at the router console: [docs/runbooks/bootstrap.md](docs/runbooks/bootstrap.md).
 
 ## Repository layout
 

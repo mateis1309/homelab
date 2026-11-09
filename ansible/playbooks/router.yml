@@ -6,8 +6,8 @@
     - role: common
     - role: hardening
 
-# Before the one-time VLAN cut-over (router_network_live_apply: false) this only STAGES the new
-# network and firewall config; DNS/DHCP and WireGuard wait until the VLANs exist.
+# On a fresh install (router_network_live_apply: false) this only STAGES the network and firewall
+# config, and DNS/DHCP, WireGuard and NUT wait for the one-time VLAN cut-over from the console.
 - name: Router - network, firewall, services
   hosts: routers
   become: true

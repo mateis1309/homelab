@@ -1,7 +1,8 @@
-# Bootstrap: first rollout on the real hardware
+# Bootstrap: rebuilding the lab from bare metal
 
-Order matters: network first, then the hypervisor, then VMs, then services. Plan a two-hour maintenance window
-for step 2, because the house is offline during the switch-over.
+How the lab is built from nothing: after replacing the router or the NUC, or to reproduce the setup elsewhere.
+Order matters: network first, then the hypervisor, then VMs, then services. Step 2 takes the house offline for
+about two hours.
 
 ## 0. Control machine
 
@@ -19,7 +20,7 @@ so check key login works **before** the first run.
 ## 1. Router: stage (no downtime)
 
 On the router, check the port names (`ip -br link`) and fix `router_wan_interface` / `router_lan_bond_members`
-in `group_vars/routers.yml` if needed. Then, with `router_network_live_apply: false`:
+in `group_vars/routers.yml` if needed, and set `router_network_live_apply: false`. Then:
 
 ```bash
 make router
@@ -28,7 +29,7 @@ make router
 This applies the baseline and hardening and **stages** the netplan and nftables files
 (`/etc/netplan/60-homelab.yaml.staged`, `/etc/nftables.conf.staged`). Nothing changes on the network yet.
 
-## 2. Cut-over (maintenance window, at the router console)
+## 2. Cut-over (at the router console)
 
 1. **Switches.** Configure the D-Link and Netgear as in [network.md](../network.md#switch-configuration): create
    VLANs 10–60, the LACP group on ports 1–3 tagged with every VLAN, and the access ports. Leave one spare port
@@ -102,5 +103,3 @@ make vms
    - `make services` again to load the secrets.
 4. Vaultwarden: open `https://vault.<domain>/admin` with the admin token and invite users.
 5. `make restore-test-now` after the first nightly backup, then `make audit`.
-
-Tick the steps off in the README status table as they go live.

@@ -2,8 +2,6 @@
 
 Roughly in order.
 
-- [ ] **Roll out** steps 1–8 from the README status table.
-- [ ] **Wi-Fi AP with VLAN SSIDs** (trusted / iot / guest): required before the iot and guest zones are useful.
 - [ ] **Re-terminate the Cat5e phone runs** to RJ45 for the PoE cameras, then enable Frigate.
 - [ ] **openHAB as code**: manage the Pi with Ansible (Raspberry Pi OS Lite), and keep openHAB's config in git.
 - [ ] **Retire SpaceMonkey** once the security-system integration runs on openHAB.

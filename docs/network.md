@@ -15,7 +15,7 @@ address. Static hosts get `.10–.99` and DHCP hands out `.100–.199`.
 | servers | 20 | 10.10.20.0/24 | yes | DS1815+, svc-01, mon-01, Minecraft |
 | backup | 25 | 10.10.25.0/24 | **no** | NAS326 |
 | trusted | 30 | 10.10.30.0/24 | yes | laptops, phones, desktop; default for wall drops |
-| iot | 40 | 10.10.40.0/24 | yes | openHAB Pi, Chromecast Audio, Echo, Ring, SpaceMonkey (until retired) |
+| iot | 40 | 10.10.40.0/24 | yes | openHAB Pi, Chromecast Audio, Echo, Ring, SpaceMonkey (being retired) |
 | cameras | 50 | 10.10.50.0/24 | **no** | PoE IP cameras |
 | guest | 60 | 10.10.60.0/24 | yes | visitors |
 | vpn | – | 10.10.99.0/24 | yes | WireGuard peers (laptop, phone) |
@@ -103,9 +103,8 @@ Netgear GS110TP:
 
 ## Wi-Fi
 
-Chromecast Audio, Echo and the Ring doorbell are Wi-Fi only, so the iot and guest zones need an access point
-that maps SSIDs to VLANs (one trunk port, tagged 30/40/60). The inventory doesn't include one yet. Any
-VLAN-capable AP works (OpenWrt, UniFi, Omada); enable client isolation on the guest SSID.
+Chromecast Audio, Echo and the Ring doorbell are Wi-Fi only. They join through an access point that maps one SSID
+to each of trusted, iot and guest (switch port 10, tagged 30/40/60). The guest SSID has client isolation on.
 
 ## Casting across VLANs
 

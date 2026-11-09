@@ -16,4 +16,4 @@ Remote access moves from OpenVPN to WireGuard. Peers get a /32 in `10.10.99.0/24
 - WireGuard has no user accounts. Revoking a device means removing its peer and re-running the playbook.
 - Admin access from home also goes through WireGuard (51820/udp is open from trusted), so the laptop can stay on
   the trusted VLAN.
-- OpenVPN stays up until every peer has moved (`wireguard_disable_openvpn`).
+- OpenVPN ran alongside WireGuard while the peers moved over, then was retired (`wireguard_disable_openvpn`).

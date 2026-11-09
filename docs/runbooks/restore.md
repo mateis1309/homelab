@@ -40,7 +40,7 @@ and copy `/opt/backup/dumps/vaultwarden.sqlite3` over `/opt/stacks/vaultwarden/d
 4. Load the database dumps as above, then start the stacks.
 5. `make restore-test-now` and `make audit`.
 
-Expected time: about 30–45 minutes, most of it Paperless media. Write down the real time the first time you do it.
+Expected time: about 30–45 minutes, most of it Paperless media.
 
 ## The DS1815+ is gone
 

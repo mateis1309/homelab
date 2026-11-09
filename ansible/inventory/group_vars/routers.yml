@@ -4,8 +4,9 @@
 router_wan_interface: eno1
 router_lan_bond_members: [eno2, eno3, eno4]
 router_lan_bond_name: bond0
-# Keep false until the one-time cut-over from the console (docs/runbooks/bootstrap.md).
-router_network_live_apply: false
+# The VLAN layout is live, so network changes are applied directly (behind safe_apply).
+# On a fresh install this starts as false: see docs/runbooks/bootstrap.md.
+router_network_live_apply: true
 
 # --- DNS / DHCP (dnsmasq) ---
 router_dns_upstreams: [9.9.9.9, 149.112.112.112] # Quad9, malware-filtering
@@ -57,15 +58,16 @@ router_rollback_seconds: 120
 # --- WireGuard ---
 wireguard_address: "{{ lab_vpn.cidr | regex_replace('\\.0/', '.1/') }}"
 wireguard_port: "{{ lab_vpn.port }}"
+# Peer public keys are redacted in the published copy of this repository.
 wireguard_peers:
   - name: laptop
-    public_key: REPLACE_WITH_PEER_PUBLIC_KEY_laptop000000000=
+    public_key: REDACTED_PEER_PUBLIC_KEY_laptop00000000000000=
     ip: 10.10.99.10
   - name: phone
-    public_key: REPLACE_WITH_PEER_PUBLIC_KEY_phone00000000000=
+    public_key: REDACTED_PEER_PUBLIC_KEY_phone000000000000000=
     ip: 10.10.99.11
-# Set true once every peer has moved off OpenVPN.
-wireguard_disable_openvpn: false
+# OpenVPN is retired; the role keeps its units stopped and disabled.
+wireguard_disable_openvpn: true
 
 # --- UPS (CyberPower on USB) ---
 nut_ups_name: ups # Synology DSM only accepts a UPS named "ups"

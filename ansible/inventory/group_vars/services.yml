@@ -2,8 +2,8 @@
 # Temper hardening: open the reverse proxy ports
 hardening_ufw_allowed_tcp_ports: [80, 443]
 
-# Frigate (NVR for the PoE cameras) stays out until the cameras are re-terminated.
-# Adding it here also adds its route (nvr.<domain>) to Traefik.
+# Optional: add `frigate` (NVR for the PoE cameras) here to deploy it; that also adds its
+# route (nvr.<domain>) to Traefik.
 stacks_enabled: [traefik, authentik, vaultwarden, paperless]
 
 # Hostnames under services_domain, all on Traefik. forward_auth puts authentik login in front.

@@ -49,7 +49,7 @@ lab_vpn:
   cidr: 10.10.99.0/24
   port: 51820
 
-# Every addressable host. `mac` is used for DHCP reservations (placeholders until filled in).
+# Every addressable host. `mac` is used for DHCP reservations (real MACs redacted in the published copy).
 # Hosts with a `vm:` block are created by Terraform on the Proxmox node.
 lab_hosts:
   router:
